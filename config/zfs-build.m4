@@ -511,6 +511,8 @@ AC_DEFUN([ZFS_AC_DEFAULT_PACKAGE], [
 			VENDOR=alpine ;
 		elif test -f /bin/freebsd-version ; then
 			VENDOR=freebsd ;
+		elif test -f /usr/bin/sw_vers ; then
+			VENDOR=apple ;
 		else
 			VENDOR= ;
 		fi],
@@ -535,6 +537,7 @@ AC_DEFUN([ZFS_AC_DEFAULT_PACKAGE], [
 		ubuntu)     DEFAULT_PACKAGE=deb  ;;
 		debian)     DEFAULT_PACKAGE=deb  ;;
 		freebsd)    DEFAULT_PACKAGE=pkg  ;;
+		apple)      DEFAULT_PACKAGE=pkg  ;;
 		*)          DEFAULT_PACKAGE=rpm  ;;
 	esac
 	AC_MSG_RESULT([$DEFAULT_PACKAGE])
@@ -562,6 +565,7 @@ AC_DEFUN([ZFS_AC_DEFAULT_PACKAGE], [
 		ubuntu)     DEFAULT_INIT_SCRIPT=lsb    ;;
 		debian)     DEFAULT_INIT_SCRIPT=lsb    ;;
 		freebsd)    DEFAULT_INIT_SCRIPT=freebsd;;
+		apple)      DEFAULT_INIT_SCRIPT=macos  ;;
 		*)          DEFAULT_INIT_SCRIPT=lsb    ;;
 	esac
 
@@ -594,6 +598,7 @@ AC_DEFUN([ZFS_AC_DEFAULT_PACKAGE], [
 		ubuntu)     initconfdir=/etc/default   ;;
 		debian)     initconfdir=/etc/default   ;;
 		freebsd)    initconfdir=$sysconfdir/rc.conf.d;;
+		apple)      initconfdir=${prefix}/etc/launchd/launchd.d/ ;;
 		*)          initconfdir=/etc/default   ;;
 	esac
 	AC_MSG_RESULT([$initconfdir])
@@ -615,7 +620,7 @@ dnl # Default ZFS package configuration
 dnl #
 AC_DEFUN([ZFS_AC_PACKAGE], [
 	ZFS_AC_DEFAULT_PACKAGE
-	AS_IF([test x$VENDOR != xfreebsd], [
+	AS_IF([test x$VENDOR != xfreebsd -a x$VENDOR != xapple], [
 		ZFS_AC_RPM
 		ZFS_AC_DPKG
 		ZFS_AC_ALIEN
