@@ -32,12 +32,32 @@ if [ -f "@sysconfdir@/zfs/zsysctl.conf" ]; then
     @sbindir@/zsysctl -f @sysconfdir@/zfs/zsysctl.conf
 fi
 
+# smd: check to see if we have been instructed not to try to import at all
+if [ -f /etc/zfs/noautoimport ];
+then
+    echo "/etc/zfs/noautoimport exits, exiting";
+    exit 0;
+fi
+
+# smd: if rpool already imported it's because we probably booted from it;
+# unless we are told otherwise, mount all the filesystems
+if [ ! -f /etc/zfs/noautomount ];
+then
+       ${ZPOOL} list rpool && ${ZFS} mount -a
+fi
+
+# smd
+
+date
+echo "-zpool-import-all.sh"
+exit 0
+
 sleep 10
 echo "Running zpool import -a"
 date
 
-/bin/launchctl load /Library/LaunchDaemons/org.openzfsonosx.zpool-import.plist
-/bin/launchctl kickstart system/org.openzfsonosx.zpool-import
+# use by-serial rather than by-id
+"${ZPOOL}" import -a -d /var/run/disk/by-serial
 ret=$?
 
 date
