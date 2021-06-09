@@ -886,6 +886,12 @@ error:
 	return (NULL);
 }
 
+#ifdef __APPLE__
+
+/* We have our own zpool_read_label() / label_offset() */
+
+#else
+
 /*
  * Return the offset of the given label.
  */
@@ -973,6 +979,7 @@ zpool_read_label_slow(int fd, nvlist_t **config, int *num_labels)
 
 	return (0);
 }
+#endif /* APPLE */
 
 /*
  * Given a file descriptor, read the label information and return an nvlist
