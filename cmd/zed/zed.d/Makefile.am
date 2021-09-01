@@ -32,8 +32,8 @@ dist_zedexec_SCRIPTS = \
 	pool_import-led.sh \
 	resilver_finish-start-scrub.sh \
 	trim_finish-notify.sh \
-	zvol.create.sh \
-        zvol.remove.sh
+	zvol_create.sh \
+        zvol_remove.sh
 
 nodist_zedexec_SCRIPTS = history_event-zfs-list-cacher.sh
 
@@ -53,8 +53,8 @@ zedconfdefaults = \
 	vdev_attach-led.sh \
 	pool_import-led.sh \
 	resilver_finish-start-scrub.sh \
-	zvol.create.sh \
-        zvol.remove.sh
+	zvol_create.sh \
+        zvol_remove.sh
 
 install-data-hook:
 	$(MKDIR_P) "$(DESTDIR)$(zedconfdir)"
