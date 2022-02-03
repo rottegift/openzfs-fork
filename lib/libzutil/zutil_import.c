@@ -1042,11 +1042,11 @@ zpool_read_label(int fd, nvlist_t **config, int *num_labels)
 					// This shouldn't be possible to
 					// encounter, die if we do.
 					ASSERT(B_FALSE);
-					fallthrough;
+					zfsfallthrough;
 				case EOPNOTSUPP:
 				case ENOSYS:
 					do_slow = B_TRUE;
-					fallthrough;
+					zfsfallthrough;
 				case 0:
 				default:
 					(void) aio_return(&aiocbs[l]);

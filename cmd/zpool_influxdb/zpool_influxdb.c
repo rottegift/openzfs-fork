@@ -118,7 +118,7 @@ escape_string(const char *s)
 		case '=':
 		case '\\':
 			*d++ = '\\';
-			fallthrough;
+			zfsfallthrough;
 		default:
 			*d = *c;
 		}
