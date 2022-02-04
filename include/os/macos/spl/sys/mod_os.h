@@ -93,20 +93,20 @@ extern "C" {
 #define	ZSYSCTL_ULONG(parent, nbr, name, access, ptr, val, descr) \
     SYSCTL_ULONG(parent, nbr, name, access, ptr, descr)
 
-extern void sysctl_os_load(const char *name, void *);
-
-/*
- * FreeBSD uses "_vfs_" but to be backward compatible
- * with older macOS versions, we will use a different scope.
- */
-// _sysctl__kstot_zfs_darwin_tunable_zfs_dmu_prefetch_max
+/* See sysctl_os.c for the constructor work */
 #define	ZFS_MODULE_PARAM(scope_prefix, name_prefix, name, type, perm, desc) \
-    SYSCTL_DECL( _kstot_zfs_darwin_tunable_ ## scope_prefix); \
-    ZSYSCTL_##type( _kstot_zfs_darwin_tunable_ ## scope_prefix, OID_AUTO, name, perm, \
+    SYSCTL_DECL( _kstat_zfs_darwin_tunable_ ## scope_prefix); \
+    ZSYSCTL_##type( _kstat_zfs_darwin_tunable_ ## scope_prefix, OID_AUTO, name, perm, \
 	    &name_prefix ## name, 0, desc) ; \
-	__attribute__((constructor)) void _zcnst_sysctl__kstot_zfs_darwin_tunable_ ## scope_prefix ## _ ## name (void) \
+	__attribute__((constructor)) void \
+	    _zcnst_sysctl__kstat_zfs_darwin_tunable_ ## scope_prefix ## _ ## name (void) \
 	{ \
-		sysctl_os_load(__func__, &sysctl__kstot_zfs_darwin_tunable_ ## scope_prefix ## _ ## name ); \
+		sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_ ## scope_prefix ## _ ## name ); \
+	} \
+	__attribute__((destructor)) void \
+	    _zdest_sysctl__kstat_zfs_darwin_tunable_ ## scope_prefix ## _ ## name (void) \
+	{ \
+		sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_ ## scope_prefix ## _ ## name ); \
 	}
 
 

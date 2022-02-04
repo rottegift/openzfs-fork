@@ -25,6 +25,21 @@
  *
  */
 
+/*
+ * The file "os/macos/spl/sys/mod_os.h" handles mapping Linux ZFS_MODULE_
+ * tunables into sysctl - like FreeBSD does. However, on macOS we
+ * have to additionally call sysctl_register_oid() for each struct.
+ * We can not use "linker sets" on macOS, due to kernel restrictions,
+ * so mod_os.h defines a "__attribute__((constructor))" function
+ * for each parameter, each called when kext loads.
+ * Similarly, all destructor functions call sysctl_unregister_oid().
+ *
+ * When new ZFS_MODULE_PARAMS() add a new parameter, they should
+ * show automatically. However, if a new branch is added, like that
+ * of .zfs."vdev".  or .zfs."condense". then matching lines are
+ * required in sysctl_os_init() and sysctl_os_fini().
+ */
+
 #include <sys/cdefs.h>
 
 #include <sys/types.h>
@@ -90,161 +105,143 @@
 
 /* BEGIN CSTYLED */
 
-// SYSCTL_DECL(zfs);
-// SYSCTL_NODE(_kstat, OID_AUTO, zfs, CTLFLAG_RD, 0, "");
+/*
+ * We want, from old OSX:
+ *   kstot.zfs.darwin.tunable.zfs_condense_indirect_commit_entry_delay_ms
+ * OpenZFS defines
+ *   ZFS_MODULE_PARAM(zfs_condense, zfs_condense_, indirect_commit_entry_delay_ms, INT, ZMOD_RW,
+ *   _sysctl__kstot_zfs_darwin_tunable_zfs_condense_indirect_commit_entry_delay_ms
+ *
+ * Since we are a bit deeper in the tree, we need to define a node for each
+ * part, even if they are empty.
+ */
+SYSCTL_DECL(_kstat);
 
-// SYSCTL_DECL(tunable);
+/* kstat is defined in spl-kstat.c */
+// SYSCTL_NODE( , OID_AUTO, kstat, CTLFLAG_RW, 0, "");
 
-// sysctl__kstat_zfs_darwin_tunable_children
+SYSCTL_NODE(_kstat, OID_AUTO, zfs,
+ 	CTLFLAG_RD | CTLFLAG_LOCKED,
+ 	0, "");
 
-SYSCTL_DECL(_kstot);
-SYSCTL_NODE( , OID_AUTO, kstot, CTLFLAG_RW, 0, "");
-
-SYSCTL_STRING(_kstot, OID_AUTO, helloworld,
+SYSCTL_NODE(_kstat_zfs, OID_AUTO, darwin,
 	CTLFLAG_RD | CTLFLAG_LOCKED,
-	"roger", 0, "pewpew");
-SYSCTL_NODE(_kstot, OID_AUTO, zfs,
+	0, "");
+SYSCTL_NODE(_kstat_zfs_darwin, OID_AUTO, tunable,
 	CTLFLAG_RD | CTLFLAG_LOCKED,
-	0, "pewpew");
-SYSCTL_NODE(_kstot_zfs, OID_AUTO, darwin,
+	0, "");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs,
 	CTLFLAG_RD | CTLFLAG_LOCKED,
-	0, "pewpew");
-SYSCTL_NODE(_kstot_zfs_darwin, OID_AUTO, tunable,
-	CTLFLAG_RD | CTLFLAG_LOCKED,
-	0, "pewpew");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs,
-	CTLFLAG_RD | CTLFLAG_LOCKED,
-	0, "pewpew");
+	0, "");
 
-SYSCTL_STRING(_kstot_zfs, OID_AUTO, helloworld,
-	CTLFLAG_RD | CTLFLAG_LOCKED,
-	"roger", 0, "pewpew");
-SYSCTL_STRING(_kstot_zfs_darwin_tunable, OID_AUTO, helloworld,
-	CTLFLAG_RD | CTLFLAG_LOCKED,
-	"roger", 0, "pewpew");
+SYSCTL_DECL(_kstat_zfs_darwin_tunable);
 
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_arc, CTLFLAG_RW, 0, "ZFS adaptive replacement cache");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_condense, CTLFLAG_RW, 0, "ZFS condense");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_dbuf, CTLFLAG_RW, 0, "ZFS disk buf cache");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_dbuf_cache, CTLFLAG_RW, 0, "ZFS disk buf cache");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_deadman, CTLFLAG_RW, 0, "ZFS deadman");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_dedup, CTLFLAG_RW, 0, "ZFS dedup");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_l2arc, CTLFLAG_RW, 0, "ZFS l2arc");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_livelist, CTLFLAG_RW, 0, "ZFS livelist");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_lua, CTLFLAG_RW, 0, "ZFS lua");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_metaslab, CTLFLAG_RW, 0, "ZFS metaslab");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_mg, CTLFLAG_RW, 0, "ZFS metaslab group");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_multihost, CTLFLAG_RW, 0, "ZFS multihost protection");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_prefetch, CTLFLAG_RW, 0, "ZFS prefetch");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_reconstruct, CTLFLAG_RW, 0, "ZFS reconstruct");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_recv, CTLFLAG_RW, 0, "ZFS receive");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_send, CTLFLAG_RW, 0, "ZFS send");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_spa, CTLFLAG_RW, 0, "ZFS space allocation");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_trim, CTLFLAG_RW, 0, "ZFS TRIM");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_txg, CTLFLAG_RW, 0, "ZFS transaction group");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_vdev, CTLFLAG_RW, 0, "ZFS VDEV");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_vnops, CTLFLAG_RW, 0, "ZFS VNOPS");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_zevent, CTLFLAG_RW, 0, "ZFS event");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_zil, CTLFLAG_RW, 0, "ZFS ZIL");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs_zio, CTLFLAG_RW, 0, "ZFS ZIO");
 
-
-//SYSCTL_NODE(_kstot, OID_AUTO, zfs_darwin_tunable, CTLFLAG_RW, 0, "");
-//SYSCTL_NODE(_kstot, OID_AUTO, zfs_darwin_tunable_zfs, CTLFLAG_RW, 0, "");
-
-SYSCTL_DECL(_kstot_zfs_darwin_tunable);
-
-// sysctl__kstat_zfs_darwin_tunable_children
-
-// SYSCTL_NODE(_kstat, OID_AUTO, zfs_darwin_tunable, CTLFLAG_RD, 0, "");
-
-// SYSCTL_NODE(/* root */, OID_AUTO, kstat_zfs_darwin_tunable, CTLFLAG_RD, 0, "");
-
-// SYSCTL_NODE( , OID_AUTO, _kstat_zfs_darwin_tunable, CTLFLAG_RD, 0, "test");
-
-// SYSCTL_NODE(/* root */, OID_AUTO, kstat_zfs_darwin_tunable_zfs, CTLFLAG_RD, 0, "");
-// SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfs, CTLFLAG_RD, 0, "testest");
-
-SYSCTL_DECL(_booga);
-SYSCTL_NODE(, OID_AUTO, booga, CTLFLAG_RD, 0, "");
-SYSCTL_STRING(_booga, OID_AUTO, helloworld,
-	CTLFLAG_RD | CTLFLAG_LOCKED,
-	"roger", 0, "pewpew");
-
-// We want, from old OSX:
-//   kstot.zfs.darwin.tunable.zfs_condense_indirect_commit_entry_delay_ms
-// OpenZFS defines
-//   ZFS_MODULE_PARAM(zfs_condense, zfs_condense_, indirect_commit_entry_delay_ms, INT, ZMOD_RW,
-//   _sysctl__kstot_zfs_darwin_tunable_zfs_condense_indirect_commit_entry_delay_ms
-
-
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_arc, CTLFLAG_RW, 0, "ZFS adaptive replacement cache");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_condense, CTLFLAG_RW, 0, "ZFS condense");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_dbuf, CTLFLAG_RW, 0, "ZFS disk buf cache");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_dbuf_cache, CTLFLAG_RW, 0, "ZFS disk buf cache");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_deadman, CTLFLAG_RW, 0, "ZFS deadman");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_dedup, CTLFLAG_RW, 0, "ZFS dedup");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_l2arc, CTLFLAG_RW, 0, "ZFS l2arc");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_livelist, CTLFLAG_RW, 0, "ZFS livelist");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_lua, CTLFLAG_RW, 0, "ZFS lua");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_metaslab, CTLFLAG_RW, 0, "ZFS metaslab");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_mg, CTLFLAG_RW, 0, "ZFS metaslab group");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_multihost, CTLFLAG_RW, 0, "ZFS multihost protection");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_prefetch, CTLFLAG_RW, 0, "ZFS prefetch");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_reconstruct, CTLFLAG_RW, 0, "ZFS reconstruct");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_recv, CTLFLAG_RW, 0, "ZFS receive");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_send, CTLFLAG_RW, 0, "ZFS send");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_spa, CTLFLAG_RW, 0, "ZFS space allocation");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_trim, CTLFLAG_RW, 0, "ZFS TRIM");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_txg, CTLFLAG_RW, 0, "ZFS transaction group");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_vdev, CTLFLAG_RW, 0, "ZFS VDEV");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_vnops, CTLFLAG_RW, 0, "ZFS VNOPS");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_zevent, CTLFLAG_RW, 0, "ZFS event");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_zil, CTLFLAG_RW, 0, "ZFS ZIL");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfs_zio, CTLFLAG_RW, 0, "ZFS ZIO");
-
-SYSCTL_NODE(_kstot_zfs_darwin_tunable_zfs_livelist, OID_AUTO, condense, CTLFLAG_RW, 0,
+SYSCTL_NODE(_kstat_zfs_darwin_tunable_zfs_livelist, OID_AUTO, condense, CTLFLAG_RW, 0,
     "ZFS livelist condense");
-// sysctl__kstot_zfs_darwin_tunable_metaslab_children
 
-SYSCTL_NODE(_kstot_zfs_darwin_tunable_zfs_vdev, OID_AUTO, cache, CTLFLAG_RW, 0, "ZFS VDEV Cache");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable_zfs_vdev, OID_AUTO, file, CTLFLAG_RW, 0, "ZFS VDEV file");
-SYSCTL_NODE(_kstot_zfs_darwin_tunable_zfs_vdev, OID_AUTO, mirror, CTLFLAG_RD, 0,
+SYSCTL_NODE(_kstat_zfs_darwin_tunable_zfs_vdev, OID_AUTO, cache, CTLFLAG_RW, 0, "ZFS VDEV Cache");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable_zfs_vdev, OID_AUTO, file, CTLFLAG_RW, 0, "ZFS VDEV file");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable_zfs_vdev, OID_AUTO, mirror, CTLFLAG_RD, 0,
     "ZFS VDEV mirror");
-
-// SYSCTL_DECL(_kstot_zfs_darwin_tunable_version);
-// SYSCTL_CONST_STRING(_kstot_zfs_darwin_tunable_version, OID_AUTO, module, CTLFLAG_RD,
-//    (ZFS_META_VERSION "-" ZFS_META_RELEASE), "OpenZFS module version");
-
-extern struct sysctl_oid sysctl__kstot_zfs_darwin_tunable_zfs_dmu_prefetch_max;
-static int thingy = 0;
 
 void sysctl_os_init(void)
 {
-	sysctl_register_oid(&sysctl__booga);
-	sysctl_register_oid(&sysctl__booga_helloworld);
-	sysctl_register_oid(&sysctl__kstot);
-	sysctl_register_oid(&sysctl__kstot_helloworld);
-	sysctl_register_oid(&sysctl__kstot_zfs);
-	sysctl_register_oid(&sysctl__kstot_zfs_helloworld);
-	sysctl_register_oid(&sysctl__kstot_zfs_darwin);
-	sysctl_register_oid(&sysctl__kstot_zfs_darwin_tunable);
-	sysctl_register_oid(&sysctl__kstot_zfs_darwin_tunable_helloworld);
+//	sysctl_register_oid(&sysctl__kstat);
+	sysctl_register_oid(&sysctl__kstat_zfs);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable);
 
-	sysctl_register_oid(&sysctl__kstot_zfs_darwin_tunable_zfs);
-//	sysctl_register_oid(&sysctl__kstot_zfs_darwin_tunable_zfs_arc);
-
-//	sysctl_register_oid(&sysctl__kstot_zfs_darwin_tunable_zfs_dmu_prefetch_max);
-
-	printf("And thingy is %d\n", thingy);
-
-    // __asm__(".symbol_resolver _sysctl__kstot_zfs_darwin_tunable_zfs_dmu_prefetch_max");
-
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_arc);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_condense);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_dbuf);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_dbuf_cache);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_deadman);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_dedup);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_l2arc);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_livelist);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_lua);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_metaslab);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_mg);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_multihost);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_prefetch);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_reconstruct);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_recv);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_send);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_spa);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_trim);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_txg);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vdev);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vnops);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_zevent);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_zil);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_zio);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_livelist_condense);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vdev_cache);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vdev_file);
+	sysctl_register_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vdev_mirror);
 }
 
 void sysctl_os_fini(void)
 {
-
-	sysctl_unregister_oid(&sysctl__kstot_zfs_darwin_tunable_zfs_arc);
-	sysctl_unregister_oid(&sysctl__kstot_zfs_darwin_tunable_zfs);
-	sysctl_unregister_oid(&sysctl__kstot_zfs_darwin_tunable);
-	sysctl_unregister_oid(&sysctl__booga_helloworld);
-	sysctl_unregister_oid(&sysctl__booga);
-}
-
-
-//extern void testicles(void) __attribute__((section("__TEXT, initcode")));
-//extern void testicles(void) __attribute__((constructor));
-
-__attribute__((constructor)) void
-testicles(void)
-{
-	printf("%s: I raan!\n", __func__);
-	thingy += 3;
-}
-
-void
-sysctl_os_load(const char *name, void *addy)
-{
-	printf("called with %s:%p.\n", name, addy);
-	thingy += 1;
-	sysctl_register_oid(addy);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vdev_mirror);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vdev_file);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vdev_cache);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_livelist_condense);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_zio);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_zil);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_zevent);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vnops);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_vdev);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_txg);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_trim);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_spa);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_send);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_recv);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_reconstruct);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_prefetch);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_multihost);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_mg);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_metaslab);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_lua);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_livelist);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_l2arc);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_dedup);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_deadman);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_dbuf_cache);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_dbuf);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_condense);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs_arc);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable_zfs);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin_tunable);
+	sysctl_unregister_oid(&sysctl__kstat_zfs_darwin);
+	sysctl_unregister_oid(&sysctl__kstat_zfs);
+//	sysctl_unregister_oid(&sysctl__kstat);
 }
 
 extern arc_state_t ARC_anon;
@@ -321,56 +318,56 @@ extern int l2arc_noprefetch;			/* don't cache prefetch bufs */
 extern int l2arc_feed_again;			/* turbo warmup */
 extern int l2arc_norw;			/* no reads during writes */
 
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, anon_size, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, anon_size, CTLFLAG_RD,
     &ARC_anon.arcs_size.rc_count, 0, "size of anonymous state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, anon_metadata_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, anon_metadata_esize, CTLFLAG_RD,
     &ARC_anon.arcs_esize[ARC_BUFC_METADATA].rc_count, 0,
     "size of anonymous state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, anon_data_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, anon_data_esize, CTLFLAG_RD,
     &ARC_anon.arcs_esize[ARC_BUFC_DATA].rc_count, 0,
     "size of anonymous state");
 
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mru_size, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mru_size, CTLFLAG_RD,
     &ARC_mru.arcs_size.rc_count, 0, "size of mru state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mru_metadata_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mru_metadata_esize, CTLFLAG_RD,
     &ARC_mru.arcs_esize[ARC_BUFC_METADATA].rc_count, 0,
     "size of metadata in mru state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mru_data_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mru_data_esize, CTLFLAG_RD,
     &ARC_mru.arcs_esize[ARC_BUFC_DATA].rc_count, 0,
     "size of data in mru state");
 
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mru_ghost_size, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mru_ghost_size, CTLFLAG_RD,
     &ARC_mru_ghost.arcs_size.rc_count, 0, "size of mru ghost state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mru_ghost_metadata_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mru_ghost_metadata_esize, CTLFLAG_RD,
     &ARC_mru_ghost.arcs_esize[ARC_BUFC_METADATA].rc_count, 0,
     "size of metadata in mru ghost state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mru_ghost_data_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mru_ghost_data_esize, CTLFLAG_RD,
     &ARC_mru_ghost.arcs_esize[ARC_BUFC_DATA].rc_count, 0,
     "size of data in mru ghost state");
 
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mfu_size, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mfu_size, CTLFLAG_RD,
     &ARC_mfu.arcs_size.rc_count, 0, "size of mfu state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mfu_metadata_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mfu_metadata_esize, CTLFLAG_RD,
     &ARC_mfu.arcs_esize[ARC_BUFC_METADATA].rc_count, 0,
     "size of metadata in mfu state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mfu_data_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mfu_data_esize, CTLFLAG_RD,
     &ARC_mfu.arcs_esize[ARC_BUFC_DATA].rc_count, 0,
     "size of data in mfu state");
 
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mfu_ghost_size, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mfu_ghost_size, CTLFLAG_RD,
     &ARC_mfu_ghost.arcs_size.rc_count, 0, "size of mfu ghost state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mfu_ghost_metadata_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mfu_ghost_metadata_esize, CTLFLAG_RD,
     &ARC_mfu_ghost.arcs_esize[ARC_BUFC_METADATA].rc_count, 0,
     "size of metadata in mfu ghost state");
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, mfu_ghost_data_esize, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, mfu_ghost_data_esize, CTLFLAG_RD,
     &ARC_mfu_ghost.arcs_esize[ARC_BUFC_DATA].rc_count, 0,
     "size of data in mfu ghost state");
 
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, l2c_only_size, CTLFLAG_RD,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, l2c_only_size, CTLFLAG_RD,
     &ARC_l2c_only.arcs_size.rc_count, 0, "size of mru state");
 
 static int
-sysctl_kstot_zfs_darwin_tunable_arc_no_grow_shift(ZFS_MODULE_PARAM_ARGS)
+sysctl_kstat_zfs_darwin_tunable_arc_no_grow_shift(ZFS_MODULE_PARAM_ARGS)
 {
 	int err, val;
 
@@ -386,9 +383,9 @@ sysctl_kstot_zfs_darwin_tunable_arc_no_grow_shift(ZFS_MODULE_PARAM_ARGS)
 	return (0);
 }
 
-SYSCTL_PROC(_kstot_zfs_darwin_tunable, OID_AUTO, arc_no_grow_shift,
+SYSCTL_PROC(_kstat_zfs_darwin_tunable, OID_AUTO, arc_no_grow_shift,
     CTLTYPE_INT | CTLFLAG_RWTUN | CTLFLAG_MPSAFE, NULL, sizeof (int),
-    sysctl_kstot_zfs_darwin_tunable_arc_no_grow_shift, "I",
+    sysctl_kstat_zfs_darwin_tunable_arc_no_grow_shift, "I",
     "log2(fraction of ARC which must be free to allow growing)");
 
 int
@@ -419,11 +416,11 @@ param_set_arc_int(ZFS_MODULE_PARAM_ARGS)
 	return (0);
 }
 
-SYSCTL_PROC(_kstot_zfs_darwin_tunable, OID_AUTO, arc_min,
+SYSCTL_PROC(_kstat_zfs_darwin_tunable, OID_AUTO, arc_min,
     CTLTYPE_ULONG | CTLFLAG_RWTUN | CTLFLAG_MPSAFE,
     &zfs_arc_min, sizeof (zfs_arc_min), param_set_arc_min, "LU",
     "min arc size (LEGACY)");
-SYSCTL_PROC(_kstot_zfs_darwin_tunable, OID_AUTO, arc_max,
+SYSCTL_PROC(_kstat_zfs_darwin_tunable, OID_AUTO, arc_max,
     CTLTYPE_ULONG | CTLFLAG_RWTUN | CTLFLAG_MPSAFE,
     &zfs_arc_max, sizeof (zfs_arc_max), param_set_arc_max, "LU",
     "max arc size (LEGACY)");
@@ -434,16 +431,16 @@ SYSCTL_PROC(_kstot_zfs_darwin_tunable, OID_AUTO, arc_max,
 /* dmu.c */
 
 /* dmu_zfetch.c */
-SYSCTL_NODE(_kstot_zfs_darwin_tunable, OID_AUTO, zfetch, CTLFLAG_RW, 0, "ZFS ZFETCH (LEGACY)");
+SYSCTL_NODE(_kstat_zfs_darwin_tunable, OID_AUTO, zfetch, CTLFLAG_RW, 0, "ZFS ZFETCH (LEGACY)");
 
 /* max bytes to prefetch per stream (default 8MB) */
 extern uint32_t	zfetch_max_distance;
-SYSCTL_UINT(_kstot_zfs_darwin_tunable_zfetch, OID_AUTO, max_distance, CTLFLAG_RWTUN,
+SYSCTL_UINT(_kstat_zfs_darwin_tunable_zfetch, OID_AUTO, max_distance, CTLFLAG_RWTUN,
     &zfetch_max_distance, 0, "Max bytes to prefetch per stream (LEGACY)");
 
 /* max bytes to prefetch indirects for per stream (default 64MB) */
 extern uint32_t	zfetch_max_idistance;
-SYSCTL_UINT(_kstot_zfs_darwin_tunable_zfetch, OID_AUTO, max_idistance, CTLFLAG_RWTUN,
+SYSCTL_UINT(_kstat_zfs_darwin_tunable_zfetch, OID_AUTO, max_idistance, CTLFLAG_RWTUN,
     &zfetch_max_idistance, 0,
     "Max bytes to prefetch indirects for per stream (LEGACY)");
 
@@ -451,11 +448,11 @@ SYSCTL_UINT(_kstot_zfs_darwin_tunable_zfetch, OID_AUTO, max_idistance, CTLFLAG_R
 
 /* dnode.c */
 extern int zfs_default_bs;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, default_bs, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, default_bs, CTLFLAG_RWTUN,
     &zfs_default_bs, 0, "Default dnode block shift");
 
 extern int zfs_default_ibs;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, default_ibs, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, default_ibs, CTLFLAG_RWTUN,
     &zfs_default_ibs, 0, "Default dnode indirect block shift");
 
 
@@ -472,7 +469,7 @@ SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, default_ibs, CTLFLAG_RWTUN,
  * is 8~16K.
  */
 extern int zfs_metaslab_sm_blksz_no_log;
-SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, sm_blksz_no_log, CTLFLAG_RDTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, sm_blksz_no_log, CTLFLAG_RDTUN,
     &zfs_metaslab_sm_blksz_no_log, 0,
     "Block size for space map in pools with log space map disabled.  "
     "Power of 2 and greater than 4096.");
@@ -483,7 +480,7 @@ SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, sm_blksz_no_log, CT
  * from a bigger block size like 128K for the metaslab space maps.
  */
 extern int zfs_metaslab_sm_blksz_with_log;
-SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, sm_blksz_with_log, CTLFLAG_RDTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, sm_blksz_with_log, CTLFLAG_RDTUN,
     &zfs_metaslab_sm_blksz_with_log, 0,
     "Block size for space map in pools with log space map enabled.  "
     "Power of 2 and greater than 4096.");
@@ -495,18 +492,18 @@ SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, sm_blksz_with_log, 
  * Values should be greater than or equal to 100.
  */
 extern int zfs_condense_pct;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, condense_pct, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, condense_pct, CTLFLAG_RWTUN,
     &zfs_condense_pct, 0,
     "Condense on-disk spacemap when it is more than this many percents"
     " of in-memory counterpart");
 
 extern int zfs_remove_max_segment;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, remove_max_segment, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, remove_max_segment, CTLFLAG_RWTUN,
     &zfs_remove_max_segment, 0, "Largest contiguous segment ZFS will attempt to"
     " allocate when removing a device");
 
 extern int zfs_removal_suspend_progress;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, removal_suspend_progress, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, removal_suspend_progress, CTLFLAG_RWTUN,
     &zfs_removal_suspend_progress, 0, "Ensures certain actions can happen while"
     " in the middle of a removal");
 
@@ -518,7 +515,7 @@ SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, removal_suspend_progress, CTLFLA
  * aggressive strategy (i.e search by size rather than offset).
  */
 extern uint64_t metaslab_df_alloc_threshold;
-SYSCTL_QUAD(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, df_alloc_threshold, CTLFLAG_RWTUN,
+SYSCTL_QUAD(_kstat_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, df_alloc_threshold, CTLFLAG_RWTUN,
     &metaslab_df_alloc_threshold,
 #ifndef __APPLE__
 	0,
@@ -532,7 +529,7 @@ SYSCTL_QUAD(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, df_alloc_threshold
  * switch to using best-fit allocations.
  */
 extern int metaslab_df_free_pct;
-SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, df_free_pct, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, df_free_pct, CTLFLAG_RWTUN,
     &metaslab_df_free_pct, 0,
     "The minimum free space, in percent, which must be available in a "
     "space map to continue allocations in a first-fit fashion");
@@ -541,7 +538,7 @@ SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, df_free_pct, CTLFLA
  * Percentage of all cpus that can be used by the metaslab taskq.
  */
 extern int metaslab_load_pct;
-SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, load_pct, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, load_pct, CTLFLAG_RWTUN,
     &metaslab_load_pct, 0,
     "Percentage of cpus that can be used by the metaslab taskq");
 
@@ -549,30 +546,30 @@ SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, load_pct, CTLFLAG_R
  * Max number of metaslabs per group to preload.
  */
 extern int metaslab_preload_limit;
-SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, preload_limit, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable_zfs_metaslab, OID_AUTO, preload_limit, CTLFLAG_RWTUN,
     &metaslab_preload_limit, 0,
     "Max number of metaslabs per group to preload");
 
 /* spa.c */
 extern int zfs_ccw_retry_interval;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, ccw_retry_interval, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, ccw_retry_interval, CTLFLAG_RWTUN,
     &zfs_ccw_retry_interval, 0,
     "Configuration cache file write, retry after failure, interval (seconds)");
 
 extern uint64_t zfs_max_missing_tvds_cachefile;
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, max_missing_tvds_cachefile, CTLFLAG_RWTUN,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, max_missing_tvds_cachefile, CTLFLAG_RWTUN,
     &zfs_max_missing_tvds_cachefile, 0,
     "allow importing pools with missing top-level vdevs in cache file");
 
 extern uint64_t zfs_max_missing_tvds_scan;
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, max_missing_tvds_scan, CTLFLAG_RWTUN,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, max_missing_tvds_scan, CTLFLAG_RWTUN,
     &zfs_max_missing_tvds_scan, 0,
     "allow importing pools with missing top-level vdevs during scan");
 
 /* spa_misc.c */
 extern int zfs_flags;
 static int
-sysctl_kstot_zfs_darwin_tunable_debug_flags(ZFS_MODULE_PARAM_ARGS)
+sysctl_kstat_zfs_darwin_tunable_debug_flags(ZFS_MODULE_PARAM_ARGS)
 {
 	int err, val;
 
@@ -594,9 +591,9 @@ sysctl_kstot_zfs_darwin_tunable_debug_flags(ZFS_MODULE_PARAM_ARGS)
 	return (0);
 }
 
-SYSCTL_PROC(_kstot_zfs_darwin_tunable, OID_AUTO, debugflags,
+SYSCTL_PROC(_kstat_zfs_darwin_tunable, OID_AUTO, debugflags,
     CTLTYPE_UINT | CTLFLAG_MPSAFE | CTLFLAG_RWTUN, NULL, 0,
-    sysctl_kstot_zfs_darwin_tunable_debug_flags, "IU", "Debug flags for ZFS testing.");
+    sysctl_kstat_zfs_darwin_tunable_debug_flags, "IU", "Debug flags for ZFS testing.");
 
 int
 param_set_deadman_synctime(ZFS_MODULE_PARAM_ARGS)
@@ -659,7 +656,7 @@ param_set_deadman_failmode(ZFS_MODULE_PARAM_ARGS)
 
 /* spacemap.c */
 extern int space_map_ibs;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, space_map_ibs, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, space_map_ibs, CTLFLAG_RWTUN,
     &space_map_ibs, 0, "Space map indirect block shift");
 
 
@@ -702,12 +699,12 @@ param_set_max_auto_ashift(ZFS_MODULE_PARAM_ARGS)
 	return (0);
 }
 
-SYSCTL_PROC(_kstot_zfs_darwin_tunable, OID_AUTO, min_auto_ashift,
+SYSCTL_PROC(_kstat_zfs_darwin_tunable, OID_AUTO, min_auto_ashift,
     CTLTYPE_U64 | CTLFLAG_RWTUN | CTLFLAG_MPSAFE,
     &zfs_vdev_min_auto_ashift, sizeof (zfs_vdev_min_auto_ashift),
     param_set_min_auto_ashift, "QU",
     "Min ashift used when creating new top-level vdev. (LEGACY)");
-SYSCTL_PROC(_kstot_zfs_darwin_tunable, OID_AUTO, max_auto_ashift,
+SYSCTL_PROC(_kstat_zfs_darwin_tunable, OID_AUTO, max_auto_ashift,
     CTLTYPE_U64 | CTLFLAG_RWTUN | CTLFLAG_MPSAFE,
     &zfs_vdev_max_auto_ashift, sizeof (zfs_vdev_max_auto_ashift),
     param_set_max_auto_ashift, "QU",
@@ -719,7 +716,7 @@ SYSCTL_PROC(_kstot_zfs_darwin_tunable, OID_AUTO, max_auto_ashift,
  * entries, we default its block size to 4K.
  */
 extern int zfs_vdev_dtl_sm_blksz;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, dtl_sm_blksz, CTLFLAG_RDTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, dtl_sm_blksz, CTLFLAG_RDTUN,
     &zfs_vdev_dtl_sm_blksz, 0,
     "Block size for DTL space map.  Power of 2 and greater than 4096.");
 
@@ -729,12 +726,12 @@ SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, dtl_sm_blksz, CTLFLAG_RDTUN,
  * (e.g. vdev_obsolete_sm), thus we default their block size to 128K.
  */
 extern int zfs_vdev_standard_sm_blksz;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, standard_sm_blksz, CTLFLAG_RDTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, standard_sm_blksz, CTLFLAG_RDTUN,
     &zfs_vdev_standard_sm_blksz, 0,
     "Block size for standard space map.  Power of 2 and greater than 4096.");
 
 extern int vdev_validate_skip;
-SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, validate_skip, CTLFLAG_RDTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable, OID_AUTO, validate_skip, CTLFLAG_RDTUN,
     &vdev_validate_skip, 0,
     "Enable to bypass vdev_validate().");
 
@@ -756,14 +753,14 @@ SYSCTL_INT(_kstot_zfs_darwin_tunable, OID_AUTO, validate_skip, CTLFLAG_RDTUN,
 /* vdev_queue.c */
 #define	ZFS_VDEV_QUEUE_KNOB_MIN(name)					\
 extern uint32_t zfs_vdev_ ## name ## _min_active;				\
-SYSCTL_UINT(_kstot_zfs_darwin_tunable_vdev, OID_AUTO, name ## _min_active, CTLFLAG_RWTUN,\
+SYSCTL_UINT(_kstat_zfs_darwin_tunable_vdev, OID_AUTO, name ## _min_active, CTLFLAG_RWTUN,\
     &zfs_vdev_ ## name ## _min_active, 0,				\
     "Initial number of I/O requests of type " #name			\
     " active for each device");
 
 #define	ZFS_VDEV_QUEUE_KNOB_MAX(name)					\
 extern uint32_t zfs_vdev_ ## name ## _max_active;				\
-SYSCTL_UINT(_kstot_zfs_darwin_tunable_vdev, OID_AUTO, name ## _max_active, CTLFLAG_RWTUN, \
+SYSCTL_UINT(_kstat_zfs_darwin_tunable_vdev, OID_AUTO, name ## _max_active, CTLFLAG_RWTUN, \
     &zfs_vdev_ ## name ## _max_active, 0,				\
     "Maximum number of I/O requests of type " #name			\
     " active for each device");
@@ -772,22 +769,22 @@ SYSCTL_UINT(_kstot_zfs_darwin_tunable_vdev, OID_AUTO, name ## _max_active, CTLFL
 #undef ZFS_VDEV_QUEUE_KNOB
 
 extern uint32_t zfs_vdev_max_active;
-SYSCTL_UINT(_kstot_zfs_darwin_tunable, OID_AUTO, top_maxinflight, CTLFLAG_RWTUN,
+SYSCTL_UINT(_kstat_zfs_darwin_tunable, OID_AUTO, top_maxinflight, CTLFLAG_RWTUN,
     &zfs_vdev_max_active, 0,
     "The maximum number of I/Os of all types active for each device. (LEGACY)");
 
 extern int zfs_vdev_def_queue_depth;
-SYSCTL_INT(_kstot_zfs_darwin_tunable_zfs_vdev, OID_AUTO, def_queue_depth, CTLFLAG_RWTUN,
+SYSCTL_INT(_kstat_zfs_darwin_tunable_zfs_vdev, OID_AUTO, def_queue_depth, CTLFLAG_RWTUN,
     &zfs_vdev_def_queue_depth, 0,
     "Default queue depth for each allocator");
 
 /*extern uint64_t zfs_multihost_history;
-SYSCTL_UQUAD(_kstot_zfs_darwin_tunable, OID_AUTO, multihost_history, CTLFLAG_RWTUN,
+SYSCTL_UQUAD(_kstat_zfs_darwin_tunable, OID_AUTO, multihost_history, CTLFLAG_RWTUN,
     &zfs_multihost_history, 0,
     "Historical staticists for the last N multihost updates");*/
 
 #ifdef notyet
-SYSCTL_INT(_kstot_zfs_darwin_tunable_vdev, OID_AUTO, trim_on_init, CTLFLAG_RW,
+SYSCTL_INT(_kstat_zfs_darwin_tunable_vdev, OID_AUTO, trim_on_init, CTLFLAG_RW,
     &vdev_trim_on_init, 0, "Enable/disable full vdev trim on initialisation");
 #endif
 
