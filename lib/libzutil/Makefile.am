@@ -33,8 +33,7 @@ libzutil_la_SOURCES = $(USER_C)
 if BUILD_MACOS
 USER_C += \
 	os/macos/zutil_device_path_os.c \
-	os/macos/zutil_import_os.c \
-	os/macos/zutil_compat.c
+	os/macos/zutil_import_os.c
 endif
 
 libzutil_la_LIBADD = \

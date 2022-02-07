@@ -27,6 +27,13 @@ VPATH += $(top_srcdir)/module/os/freebsd/zfs
 nodist_libzfs_core_la_SOURCES = zfs_ioctl_compat.c
 endif
 
+if BUILD_MACOS
+DEFAULT_INCLUDES += -I$(top_srcdir)/include/os/macos/zfs
+
+USER_C += \
+        os/macos/libzfs_core_ioctl.c
+endif
+
 libzfs_core_la_SOURCES = $(USER_C)
 
 libzfs_core_la_LIBADD = \
