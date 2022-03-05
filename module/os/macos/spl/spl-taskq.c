@@ -1628,7 +1628,10 @@ taskq_empty(taskq_t *tq)
 int
 taskq_empty_ent(taskq_ent_t *t)
 {
-	return (IS_EMPTY(*t));
+	if (t->tqent_prev == NULL && t->tqent_next == NULL)
+		return (TRUE);
+	else
+		return (IS_EMPTY(*t));
 }
 
 /*
