@@ -2753,14 +2753,23 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		// since there is apparently no memory shortage.
 		vmem_bucket_wake_all_waiters();
 		return (m);
-	} else {
-		spl_free_set_emergency_pressure((int64_t)size);
 	}
+
+	/*
+	 * We are very tight on memory.  total_memory is 50%
+	 * of system memory.  Try to give back 2^(-8) of that
+	 * via mechanisms in arc.c
+	 *
+	 * Chosen roughly in line with default arc_shrink_shift,
+	 * which causes a  2^(-7) byte shrink by default.
+	 *
+	 */
+	spl_free_set_emergency_pressure(
+	    (int64_t)total_memory >> 8LL);
 
 	if (vmflag & VM_PANIC) {
 		// force an allocation now to avoid a panic
 		spl_xat_lastalloc = gethrtime();
-		spl_free_set_emergency_pressure(4LL * (int64_t)size);
 		void *p = spl_vmem_malloc_unconditionally(size);
 		// p cannot be NULL (unconditional kernel malloc always works
 		// or panics)
@@ -2773,8 +2782,6 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	}
 
 	if (vmflag & VM_NOSLEEP) {
-		spl_free_set_emergency_pressure(MAX(2LL * (int64_t)size,
-		    16LL*1024LL*1024LL));
 		/* cheating a bit, but not really waiting */
 		kpreempt(KPREEMPT_SYNC);
 		void *p = spl_vmem_malloc_if_no_pressure(size);
@@ -2787,6 +2794,9 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		// the fail kstat
 		return (p);
 	}
+
+	/* deschedule to give other threads a chance to deal with pressure */
+	kpreempt(KPREEMPT_SYNC);
 
 	/*
 	 * Loop for a while trying to satisfy VM_SLEEP allocations.
@@ -2840,7 +2850,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		// here may be entered concurrently.
 		// spl_vmem_malloc_if_no_pressure does a mutex, so avoid calling
 		// it unless there is a chance it will succeed.
-		if (spl_vmem_xnu_useful_bytes_free() > (MAX(size,
+		if (spl_vmem_xnu_useful_bytes_free() > (MAX(size * 2,
 		    16ULL*1024ULL*1024ULL))) {
 			void *a = spl_vmem_malloc_if_no_pressure(size);
 			if (a != NULL) {
@@ -2894,8 +2904,13 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 			return (b);
 		} else if (now - entry_now > 0 &&
 		    ((now - entry_now) % (hz/10))) {
-			spl_free_set_emergency_pressure(MAX(size,
-			    16LL*1024LL*1024LL));
+			/*
+			 * Try to shrink ARC by 2^(-9),
+			 * half of the amount above
+			 */
+			spl_free_set_emergency_pressure(
+			    (int64_t)total_memory >> 9LL);
+			kpreempt(KPREEMPT_SYNC);
 			local_xat_pressured = true;
 		}
 	}
@@ -3766,7 +3781,7 @@ static void vmem_fini_freelist(void *vmp, void *start, size_t size)
 void
 vmem_free_span_list(void)
 {
-	int total = 0;
+	int total __maybe_unused = 0;
 	int total_count = 0;
 	struct free_slab *fs;
 //	int release = 1;
