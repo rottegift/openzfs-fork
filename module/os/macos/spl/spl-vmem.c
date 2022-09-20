@@ -2700,7 +2700,8 @@ xnu_alloc_throttled_bail(uint64_t now_ticks, vmem_t *calling_vmp,
 				return (m);
 			} else {
 				alloc_lock = false;
-				spl_free_set_emergency_pressure(bigtarget);
+				spl_free_set_emergency_pressure(
+				    total_memory >> 7LL);
 				suspends++;
 				IOSleep(1);
 			}
@@ -2727,7 +2728,8 @@ xnu_alloc_throttled_bail(uint64_t now_ticks, vmem_t *calling_vmp,
 			atomic_inc_64(&spl_xat_forced);
 			return (mp);
 		} else {
-			spl_free_set_emergency_pressure(bigtarget);
+			spl_free_set_emergency_pressure(
+			    total_memory >> 7LL);
 			suspends++;
 			IOSleep(1);
 		}
@@ -2765,7 +2767,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	 *
 	 */
 	spl_free_set_emergency_pressure(
-	    (int64_t)total_memory >> 8LL);
+	    total_memory >> 7LL);
 
 	if (vmflag & VM_PANIC) {
 		// force an allocation now to avoid a panic
@@ -2909,7 +2911,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 			 * half of the amount above
 			 */
 			spl_free_set_emergency_pressure(
-			    (int64_t)total_memory >> 9LL);
+			    total_memory >> 7LL);
 			kpreempt(KPREEMPT_SYNC);
 			local_xat_pressured = true;
 		}
@@ -3058,7 +3060,8 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 	    ! vmem_canalloc_atomic(bvmp, size)) {
 		if (spl_vmem_xnu_useful_bytes_free() < (MAX(size,
 		    16ULL*1024ULL*1024ULL))) {
-			spl_free_set_emergency_pressure(size);
+			spl_free_set_emergency_pressure(
+			    total_memory >> 7LL);
 			IOSleep(1);
 			if (!vmem_canalloc_atomic(bvmp, size) &&
 			    (spl_vmem_xnu_useful_bytes_free() < (MAX(size,
@@ -3230,7 +3233,7 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 				timedout |= 2;
 				extern uint64_t real_total_memory;
 				spl_free_set_emergency_pressure(
-				    real_total_memory / 64LL);
+				    total_memory >> 7LL);
 				// flush the current thread in xat() out of
 				// xat()'s for() loop and into xat_bail()
 				cv_broadcast(&bvmp->vm_cv);
