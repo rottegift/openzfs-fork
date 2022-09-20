@@ -1307,7 +1307,13 @@ spl_vmem_xnu_useful_bytes_free(void)
 	    spl_vm_pressure_level < 100)
 		return (0);
 
-	return (total_memory - segkmem_total_mem_allocated);
+	/*
+	 * No pressure: return non-reserved bytes not allocated.
+	 * The reserve may be needed for VM_NOWAIT and VM_PANIC flags.
+	 */
+	const uint64_t reserve = total_memory >> 8ULL;
+	const uint64_t total_minus_reserve = total_memory - reserve;
+	return (total_minus_reserve - segkmem_total_mem_allocated);
 }
 
 uint64_t
@@ -2764,8 +2770,8 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	 *
 	 * Chosen roughly in line with default arc_shrink_shift,
 	 * which causes a  2^(-7) byte shrink by default.
-	 *
 	 */
+
 	spl_free_set_emergency_pressure(
 	    total_memory >> 7LL);
 
