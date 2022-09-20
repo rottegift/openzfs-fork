@@ -3616,27 +3616,30 @@ vmem_init(const char *heap_name,
 	extern uint64_t real_total_memory;
 	VERIFY3U(real_total_memory, >=, 1024ULL*1024ULL*1024ULL);
 
-	// adjust minimum bucket span size for memory size
-	// see comments in the switch below
-	// large span: 1 MiB and bigger on large-memory (> 32 GiB)  systems
-	// small span: 256 kiB and bigger on large-memory systems
-	const uint64_t k = 1024ULL;
-	const uint64_t qm = 256ULL * k;
-	const uint64_t m = 1024ULL* k;
-	const uint64_t big = MAX(real_total_memory / (k * 32ULL), m);
-	const uint64_t small = MAX(real_total_memory / (k * 128ULL), qm);
-	spl_bucket_tunable_large_span = MIN(big, 16ULL * m);
-	spl_bucket_tunable_small_span = small;
+	/*
+	 * Minimum bucket span size, which is what we ask IOMallocAligned for.
+	 * See comments in the switch statement below.
+	 *
+	 * By default ask the kernel for at least 128kiB allocations.
+	 */
+	spl_bucket_tunable_large_span = spl_bucket_tunable_small_span =
+	    128ULL * 1024UL;
+
 	dprintf("SPL: %s: real_total_memory %llu, large spans %llu, small "
 	    "spans %llu\n", __func__, real_total_memory,
 	    spl_bucket_tunable_large_span, spl_bucket_tunable_small_span);
+
 	char *buf = vmem_alloc(spl_default_arena, VMEM_NAMELEN + 21, VM_SLEEP);
+
 	for (int32_t i = VMEM_BUCKET_LOWBIT; i <= VMEM_BUCKET_HIBIT; i++) {
 		const uint64_t bucket_largest_size = (1ULL << (uint64_t)i);
+
 		(void) snprintf(buf, VMEM_NAMELEN + 20, "%s_%llu",
 		    "bucket", bucket_largest_size);
+
 		dprintf("SPL: %s creating arena %s (i == %d)\n", __func__, buf,
 		    i);
+
 		const int bucket_number = i - VMEM_BUCKET_LOWBIT;
 		/*
 		 * To reduce the number of IOMalloc/IOFree transactions with
@@ -3652,7 +3655,9 @@ vmem_init(const char *heap_name,
 		    spl_default_arena_parent,
 		    MAX(heap_quantum * 8, bucket_largest_size * 2),
 		    VM_SLEEP | VMC_POPULATOR | VMC_NO_QCACHE | VMC_TIMEFREE);
+
 		VERIFY(b != NULL);
+
 		b->vm_source = b;
 		vmem_bucket_arena[bucket_number] = b;
 		vmem_bucket_id_to_bucket_number[b->vm_id] = bucket_number;
