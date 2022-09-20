@@ -4298,7 +4298,7 @@ spl_free_set_and_wait_pressure(int64_t new_p, boolean_t fast,
 			printf("%s: ERROR: timed out after one minute!\n",
 			    __func__);
 			break;
-		} else if (now > double_again_at && !doubled_again) {
+		} else if (doubled && now > double_again_at && !doubled_again) {
 			doubled_again = true;
 			new_p *= 2;
 		} else if (now > double_at) {
@@ -4432,7 +4432,6 @@ static void
 spl_free_thread()
 {
 	callb_cpr_t cpr;
-	int64_t last_spl_free;
 
 	CALLB_CPR_INIT(&cpr, &spl_free_thread_lock, callb_generic_cpr, FTAG);
 
@@ -4452,7 +4451,6 @@ spl_free_thread()
 		mutex_exit(&spl_free_thread_lock);
 		boolean_t lowmem = false;
 		boolean_t emergency_lowmem = false;
-		int64_t base;
 		int64_t new_spl_free = 0LL;
 
 		spl_stats.spl_free_wake_count.value.ui64++;
@@ -4466,8 +4464,6 @@ spl_free_thread()
 		uint64_t time_now_seconds = 0;
 		if (time_now > hz)
 			time_now_seconds = time_now / hz;
-
-		last_spl_free = spl_free;
 
 		new_spl_free = total_memory -
 		    segkmem_total_mem_allocated;
@@ -4780,8 +4776,6 @@ spl_free_thread()
 			else
 				recent_lowmem = 0;
 		}
-
-		base = new_spl_free;
 
 		// adjust for available memory in spl_heap_arena
 		// cf arc_available_memory()
