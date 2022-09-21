@@ -1296,23 +1296,49 @@ spl_vmem_xnu_useful_bytes_free(void)
 	extern _Atomic uint32_t spl_vm_pages_wanted;
 	extern _Atomic uint32_t spl_vm_pressure_level;
 
-	if (spl_vm_pages_wanted > 0)
-		return (PAGE_SIZE * spl_vm_pages_reclaimed);
+	/* carve out a small reserve for unconditional allocs */
+	const uint64_t reserve = total_memory >> 9ULL;
+	const uint64_t total_minus_reserve = total_memory - reserve;
 
 	/*
-	 * beware of large magic guard values,
-	 * the pressure enum only goes to 4
+	 * pages are wanted *and* we are in our reserve area,
+	 * so we report only one page of "usable" memory.
+	 *
+	 * if we are below the reserve, return the amount left
 	 */
+
+	if (spl_vm_pages_wanted > 0) {
+		if (segkmem_total_mem_allocated >= total_minus_reserve)
+			return (PAGE_SIZE * MAX(spl_vm_pages_reclaimed, 1));
+		else
+			return (total_minus_reserve -
+			    (segkmem_total_mem_allocated + PAGE_SIZE * spl_vm_pages_reclaimed));
+	}
+
+	/*
+	 * If there is pressure, and we are in the reserve area,
+	 * then there is no "usable" memory, unless we have reclaimed
+	 * some pages.
+	 *
+	 * beware of large magic guard values,
+	 * the pressure enum only goes to 4.
+	 */
+
 	if (spl_vm_pressure_level > 0 &&
-	    spl_vm_pressure_level < 100)
-		return (0);
+	    spl_vm_pressure_level < 100) {
+		if (spl_vm_pages_reclaimed > 0)
+			return (PAGE_SIZE * spl_vm_pages_reclaimed);
+		else if (segkmem_total_mem_allocated < total_minus_reserve)
+			return (PAGE_SIZE);
+		else
+			return (0);
+	}
 
 	/*
 	 * No pressure: return non-reserved bytes not allocated.
 	 * The reserve may be needed for VM_NOWAIT and VM_PANIC flags.
 	 */
-	const uint64_t reserve = total_memory >> 8ULL;
-	const uint64_t total_minus_reserve = total_memory - reserve;
+
 	return (total_minus_reserve - segkmem_total_mem_allocated);
 }
 
@@ -2858,8 +2884,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		// here may be entered concurrently.
 		// spl_vmem_malloc_if_no_pressure does a mutex, so avoid calling
 		// it unless there is a chance it will succeed.
-		if (spl_vmem_xnu_useful_bytes_free() > (MAX(size * 2,
-		    16ULL*1024ULL*1024ULL))) {
+		if (spl_vmem_xnu_useful_bytes_free() > size) {
 			void *a = spl_vmem_malloc_if_no_pressure(size);
 			if (a != NULL) {
 				atomic_inc_64(&spl_xat_late_success);
@@ -2871,13 +2896,18 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 				vmem_bucket_wake_all_waiters();
 				return (a);
 			} else {
-				// Probably spl_vm_page_free_count changed while
-				// we were in the mutex queue in
-				// spl_vmem_malloc_if_no_pressure(). There is
-				// therefore no point in doing the bail-out
-				// check below, so go back to the top of the
-				// for loop.
+				/*
+				 * there is no "usable" memory, so pressure
+				 * and re-check to see if some appears
+				 */
+				spl_free_set_emergency_pressure(
+				    total_memory >> 7LL);
 				atomic_inc_64(&spl_xat_late_deny);
+				kpreempt(KPREEMPT_SYNC);
+				mutex_enter(&bvmp->vm_lock);
+				cv_broadcast(&bvmp->vm_cv);
+				spl_xat_pressured++;
+				mutex_exit(&bvmp->vm_lock);
 				continue;
 			}
 		}
