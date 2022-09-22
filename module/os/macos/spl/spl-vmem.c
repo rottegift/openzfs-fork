@@ -1358,6 +1358,7 @@ spl_vmem_malloc_unconditionally_unlocked(size_t size)
 	return (osif_malloc(size));
 }
 
+#if MAC_OS_VERSION < MAC_OS_VERSION_12
 static inline void *
 spl_vmem_malloc_unconditionally(size_t size)
 {
@@ -1366,6 +1367,7 @@ spl_vmem_malloc_unconditionally(size_t size)
 	mutex_exit(&vmem_xnu_alloc_lock);
 	return (m);
 }
+#endif
 
 #if MAC_OS_VERSION < MAC_OS_VERSION_12
 static inline void *
@@ -2961,7 +2963,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 #else
 	cv_broadcast(&bvmp->vm_cv);
 	spl_xat_lastalloc = gethrtime();
-	return(spl_vmem_malloc_unconditionally(size));
+	return(spl_vmem_malloc_unconditionally_unlocked(size));
 #endif /* > macOS 12 */
 }
 
