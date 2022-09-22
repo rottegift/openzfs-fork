@@ -1367,6 +1367,7 @@ spl_vmem_malloc_unconditionally(size_t size)
 	return (m);
 }
 
+#if MAC_OS_VERSION < MAC_OS_VERSION_12
 static inline void *
 spl_vmem_malloc_if_no_pressure(size_t size)
 {
@@ -1389,6 +1390,7 @@ spl_vmem_malloc_if_no_pressure(size_t size)
 		return (NULL);
 	}
 }
+#endif
 
 /*
  * Allocate size bytes at offset phase from an align boundary such that the
@@ -2668,6 +2670,8 @@ vmem_bucket_wake_all_waiters(void)
 	cv_broadcast(&spl_heap_arena->vm_cv);
 }
 
+
+#if MAC_OS_VERSION < MAC_OS_VERSION_12
 /*
  * xnu_alloc_throttled_bail() : spin looking for memory
  *
@@ -2767,10 +2771,12 @@ xnu_alloc_throttled_bail(uint64_t now_ticks, vmem_t *calling_vmp,
 		}
 	}
 }
+#endif
 
 static void *
 xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 {
+#if MAC_OS_VERSION < MAC_OS_VERSION_12
 	// the caller is one of the bucket arenas.
 	// null_vmp will be spl_default_arena_parent, which is
 	// just a placeholder.
@@ -2952,12 +2958,18 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 			local_xat_pressured = true;
 		}
 	}
+#else
+	cv_broadcast(&bvmp->vm_cv);
+	spl_xat_lastalloc = gethrtime();
+	return(spl_vmem_malloc_unconditionally(size));
+#endif /* > macOS 12 */
 }
 
 static void
 xnu_free_throttled(vmem_t *vmp, void *vaddr, size_t size)
 {
 	extern void osif_free(void *, uint64_t);
+#if MAC_SO_VERSION < MAC_OS_VERSION_12
 
 	// Serialize behind a (short) spin-sleep delay, giving
 	// xnu time to do freelist management and
@@ -3026,6 +3038,11 @@ xnu_free_throttled(vmem_t *vmp, void *vaddr, size_t size)
 	// in at least the smaller buckets, let's wake up anyone in
 	// the cv_wait() in vmem_xalloc([bucket_#], ...)
 	vmem_bucket_wake_all_waiters();
+#else /* MacOS 12 and later */
+	osif_free(vaddr, size);
+	spl_xat_lastfree = gethrtime();
+	vmem_bucket_wake_all_waiters();
+#endif
 }
 
 // return 0 if the bit was unset before the atomic OR.
