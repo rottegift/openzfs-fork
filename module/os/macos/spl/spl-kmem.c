@@ -4972,6 +4972,8 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		    spl_free_fast_pressure;
 		ks->spl_osif_malloc_success.value.ui64 =
 		    stat_osif_malloc_success;
+		ks->spl_osif_malloc_fail.value.ui64 =
+		    stat_osif_malloc_fail;
 		ks->spl_osif_malloc_bytes.value.ui64 = stat_osif_malloc_bytes;
 		ks->spl_osif_free.value.ui64 = stat_osif_free;
 		ks->spl_osif_free_bytes.value.ui64 = stat_osif_free_bytes;
