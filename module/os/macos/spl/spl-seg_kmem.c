@@ -140,6 +140,7 @@ vmem_t *abd_subpage_arena;
 #ifdef _KERNEL
 extern uint64_t total_memory;
 uint64_t stat_osif_malloc_success = 0;
+uint64_t stat_osif_malloc_fail = 0;
 uint64_t stat_osif_free = 0;
 uint64_t stat_osif_malloc_bytes = 0;
 uint64_t stat_osif_free_bytes = 0;
@@ -186,8 +187,22 @@ osif_malloc(uint64_t size)
 		atomic_add_64(&stat_osif_malloc_bytes, size);
 		return ((void *)tr);
 	} else {
-		// well, this can't really happen, kernel_memory_allocate
-		// would panic instead
+		/*
+		 * Apple documentation says IOMallocAligned()
+		 * may return NULL.  Make a note of these and
+		 * bubble the result upwards to deal with,
+		 * which may result in a kmem allocator returning
+		 * NULL, or potentially a panic if VM_PANIC is set.
+		 *
+		 * The only places VM_PANIC is set are in vmem_init() and if
+		 * in the call to vmem_populate is called because the
+		 * VMC_POPULATOR flag is given vmem_create(), so only very
+		 * early in vmem initialization.
+		 */
+#ifdef _KERNEL
+		atomic_inc_64(&stat_osif_malloc_fail);
+#endif
+		ASSERT3P(tr, !=, NULL); /* make some noise outside fast path */
 		return (NULL);
 	}
 #else
