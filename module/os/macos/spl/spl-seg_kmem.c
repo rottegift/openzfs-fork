@@ -199,10 +199,9 @@ osif_malloc(uint64_t size)
 		 * VMC_POPULATOR flag is given vmem_create(), so only very
 		 * early in vmem initialization.
 		 */
-#ifdef _KERNEL
 		atomic_inc_64(&stat_osif_malloc_fail);
-#endif
-		//ASSERT3P(tr, !=, NULL); /* make some noise outside fast path */
+		ASSERT3P(tr, !=, NULL); /* make some noise outside fast path */
+		IOSleep(1); /* and yield for a millisecond */
 		return (NULL);
 	}
 #else
