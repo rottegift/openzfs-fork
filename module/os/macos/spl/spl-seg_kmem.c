@@ -202,7 +202,7 @@ osif_malloc(uint64_t size)
 #ifdef _KERNEL
 		atomic_inc_64(&stat_osif_malloc_fail);
 #endif
-		ASSERT3P(tr, !=, NULL); /* make some noise outside fast path */
+		//ASSERT3P(tr, !=, NULL); /* make some noise outside fast path */
 		return (NULL);
 	}
 #else
