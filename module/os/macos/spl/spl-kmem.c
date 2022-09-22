@@ -447,6 +447,7 @@ struct {
 } kmem_panic_info;
 
 extern uint64_t stat_osif_malloc_success;
+extern uint64_t stat_osif_malloc_fail;
 extern uint64_t stat_osif_malloc_bytes;
 extern uint64_t stat_osif_free;
 extern uint64_t stat_osif_free_bytes;
@@ -528,6 +529,7 @@ typedef struct spl_stats {
 	kstat_named_t spl_spl_free_fast_pressure;
 	kstat_named_t spl_spl_free_negative_count;
 	kstat_named_t spl_osif_malloc_success;
+	kstat_named_t spl_osif_malloc_fail;
 	kstat_named_t spl_osif_malloc_bytes;
 	kstat_named_t spl_osif_free;
 	kstat_named_t spl_osif_free_bytes;
@@ -598,6 +600,7 @@ static spl_stats_t spl_stats = {
 	{"spl_spl_free_fast_pressure", KSTAT_DATA_UINT64},
 	{"spl_spl_free_negative_count", KSTAT_DATA_UINT64},
 	{"spl_osif_malloc_success", KSTAT_DATA_UINT64},
+	{"spl_osif_malloc_fail", KSTAT_DATA_UINT64},
 	{"spl_osif_malloc_bytes", KSTAT_DATA_UINT64},
 	{"spl_osif_free", KSTAT_DATA_UINT64},
 	{"spl_osif_free_bytes", KSTAT_DATA_UINT64},
