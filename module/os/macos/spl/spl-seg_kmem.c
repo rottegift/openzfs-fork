@@ -200,11 +200,6 @@ osif_malloc(uint64_t size)
 		 * early in vmem initialization.
 		 */
 		atomic_inc_64(&stat_osif_malloc_fail);
-		ASSERT3P(tr, !=, NULL); /* make some noise outside fast path */
-#ifdef _KERNEL
-		extern void IOSleep(unsigned milliseconds);
-		IOSleep(1); /* and yield for a millisecond */
-#endif
 		return (NULL);
 	}
 #else
