@@ -2975,12 +2975,27 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	extern void spl_set_arc_no_grow(int);
 	spl_set_arc_no_grow(B_TRUE);
 	spl_free_set_emergency_pressure(total_memory >> 7LL);
-	spl_xat_pressured++;
+	atomic_inc_64(&spl_xat_pressured);
 	if ((vmflag & (VM_NOSLEEP | VM_PUSHPAGE | VM_PANIC | VM_ABORT)) > 0)
 		return (NULL);
-	IOSleep(100); /* sleep 100 milliseconds, hope to free memory */
-	return (NULL);
 
+	const uint64_t maxtarget = segkmem_total_mem_allocated - size;
+	for (uint64_t loop_for_mem = 1; ; loop_for_mem++) {
+		ASSERT3U((loop_for_mem % 100), ==, 0); // 10 second bleat beat
+		IOSleep(100); /* sleep 100 milliseconds, hope to free memory */
+		/* only try to allocate if there is memory */
+		if (maxtarget > segkmem_total_mem_allocated) {
+			p = spl_vmem_malloc_unconditionally_unlocked(size);
+			if (p != NULL)
+				return (p);
+		} else {
+			/* abuse existing kstat */
+			atomic_inc_64(&spl_xat_sleep);
+		}
+		spl_set_arc_no_grow(B_TRUE);
+		spl_free_set_emergency_pressure(total_memory >> 7LL);
+		atomic_inc_64(&spl_xat_pressured);
+	}
 #endif /* > macOS 12 */
 }
 
