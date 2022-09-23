@@ -2976,8 +2976,10 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	spl_set_arc_no_grow(B_TRUE);
 	spl_free_set_emergency_pressure(total_memory >> 7LL);
 	spl_xat_pressured++;
-	kpreempt(KPREEMPT_SYNC);
-	return(NULL);
+	if ((vmflag & (VM_NOSLEEP | VM_PUSHPAGE | VM_PANIC | VM_ABORT)) > 0)
+		return (NULL);
+	IOSleep(100); /* sleep 100 milliseconds, hope to free memory */
+	return (NULL);
 
 #endif /* > macOS 12 */
 }
