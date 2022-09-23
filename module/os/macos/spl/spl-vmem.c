@@ -431,6 +431,8 @@ uint64_t spl_vba_loop_timeout_blocked = 0;
 uint64_t spl_vba_sleep = 0;
 uint64_t spl_vba_loop_entries = 0;
 
+extern uint64_t stat_osif_malloc_fail;
+
 // bucket minimum span size tunables
 uint64_t spl_bucket_tunable_large_span = 0;
 uint64_t spl_bucket_tunable_small_span = 0;
@@ -3146,7 +3148,8 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 
 	vmem_t *bvmp = vmem_bucket_arena_by_size(size);
 
-	void *fastm = vmem_alloc(bvmp, size, vmflags | VM_BESTFIT);
+	void *fastm = vmem_alloc(bvmp, size,
+	    (stat_osif_malloc_fail > 0) ? vmflags | VM_BESTFIT : vmflags);
 
 	if (fastm != NULL) {
 		atomic_inc_64(&spl_vba_fastpath);
