@@ -2983,8 +2983,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	}
 
 	success_ct = 0;
-	fail_at = segkmem_total_mem_allocated =
-	    segkmem_total_mem_allocated - size;
+	fail_at = segkmem_total_mem_allocated - size;
 
 	/* wait until used memory falls below failure_at */
 
