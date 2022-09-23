@@ -3720,11 +3720,10 @@ vmem_init(const char *heap_name,
 		 * bucket_heap arena.
 		 */
 		vmem_t *b = vmem_create(buf, NULL, 0,
-		    MAX(heap_quantum, bucket_largest_size),
+		    heap_quantum,            /* minimum export */
 		    xnu_alloc_throttled, xnu_free_throttled,
 		    spl_default_arena_parent,
-//		    MAX(heap_quantum * 8, bucket_largest_size * 2),
-		    MAX(heap_quantum, bucket_largest_size),
+		    bucket_largest_size * 8, /* minimum import */
 		    VM_SLEEP | VMC_POPULATOR | VMC_NO_QCACHE | VMC_TIMEFREE);
 
 		VERIFY(b != NULL);

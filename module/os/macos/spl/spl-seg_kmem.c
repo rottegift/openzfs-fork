@@ -227,7 +227,13 @@ osif_free(void *buf, uint64_t size)
 void
 kernelheap_init()
 {
-	heap_arena = vmem_init("heap", NULL, 0, PAGESIZE, segkmem_alloc,
+	heap_arena = vmem_init("heap", NULL, 0,
+#if defined(__arm64__)
+	    4096,
+#else
+	    PAGESIZE,
+#endif
+	    segkmem_alloc,
 	    segkmem_free);
 }
 
