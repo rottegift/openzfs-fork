@@ -2996,7 +2996,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		return (NULL);
 
 	for (uint64_t loop_for_mem = 1; ; loop_for_mem++) {
-		ASSERT3U((loop_for_mem % 10), ==, 0); // 1 second bleat beat
+		//ASSERT3U((loop_for_mem % 10), ==, 0); // 1 second bleat beat
 		IOSleep(100); /* sleep 100 milliseconds, hope to free memory */
 		/* only try to allocate if there is memory */
 		if (fail_at > segkmem_total_mem_allocated) {
