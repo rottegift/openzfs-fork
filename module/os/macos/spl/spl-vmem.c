@@ -2964,13 +2964,27 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		}
 	}
 #else
+	static volatile _Atomic uint64_t fail_at = 0;
+	static volatile _Atomic int16_t success_ct = 0;
+
 	void *p =  spl_vmem_malloc_unconditionally_unlocked(size);
 
 	if (p != NULL) {
+		/* grow fail_at periodically */
+		if(success_ct++ >= 128) {
+			fail_at += size;
+			success_ct = 0;
+		}
 		spl_xat_lastalloc = gethrtime();
 		cv_broadcast(&bvmp->vm_cv);
 		return (p);
 	}
+
+	success_ct = 0;
+	fail_at = segkmem_total_mem_allocated =
+	    segkmem_total_mem_allocated - size;
+
+	/* wait until used memory falls below failure_at */
 
 	extern void spl_set_arc_no_grow(int);
 	spl_set_arc_no_grow(B_TRUE);
@@ -2979,12 +2993,11 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	if ((vmflag & (VM_NOSLEEP | VM_PUSHPAGE | VM_PANIC | VM_ABORT)) > 0)
 		return (NULL);
 
-	const uint64_t maxtarget = segkmem_total_mem_allocated - size;
 	for (uint64_t loop_for_mem = 1; ; loop_for_mem++) {
-		ASSERT3U((loop_for_mem % 100), ==, 0); // 10 second bleat beat
+		ASSERT3U((loop_for_mem % 10), ==, 0); // 1 second bleat beat
 		IOSleep(100); /* sleep 100 milliseconds, hope to free memory */
 		/* only try to allocate if there is memory */
-		if (maxtarget > segkmem_total_mem_allocated) {
+		if (fail_at > segkmem_total_mem_allocated) {
 			p = spl_vmem_malloc_unconditionally_unlocked(size);
 			if (p != NULL)
 				return (p);
@@ -2992,9 +3005,16 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 			/* abuse existing kstat */
 			atomic_inc_64(&spl_xat_sleep);
 		}
+		success_ct = 0;
+		const uint64_t x = segkmem_total_mem_allocated - size;
+		if (fail_at > x)
+			fail_at = x;
 		spl_set_arc_no_grow(B_TRUE);
 		spl_free_set_emergency_pressure(total_memory >> 7LL);
 		atomic_inc_64(&spl_xat_pressured);
+		/* after ten seconds, just return NULL */
+		if (loop_for_mem > 100)
+			return (NULL);
 	}
 #endif /* > macOS 12 */
 }
@@ -3130,6 +3150,7 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 
 	if (fastm != NULL) {
 		atomic_inc_64(&spl_vba_fastpath);
+		cv_broadcast(&calling_arena->vm_cv);
 		return (fastm);
 	} else if ((vmflags & (VM_NOSLEEP | VM_PANIC | VM_ABORT)) > 0) {
 		atomic_inc_64(&spl_vba_fastexit);
@@ -3137,6 +3158,9 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 	}
 
 	atomic_inc_64(&spl_vba_slowpath);
+
+	/* work harder to avoid an allocation */
+	const int slow_vmflags = vmflags | VM_BESTFIT;
 
 	// there are 13 buckets, so use a 16-bit scalar to hold
 	// a set of bits, where each bit corresponds to an in-progress
@@ -3155,7 +3179,7 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 
 	bool loop_once = false;
 
-	if ((vmflags & (VM_NOSLEEP | VM_PANIC | VM_ABORT)) == 0 &&
+	if ((slow_vmflags & (VM_NOSLEEP | VM_PANIC | VM_ABORT)) == 0 &&
 	    ! vmem_canalloc_atomic(bvmp, size)) {
 		if (spl_vmem_xnu_useful_bytes_free() < (MAX(size,
 		    16ULL*1024ULL*1024ULL))) {
@@ -3217,11 +3241,11 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 		loop_once = false;
 		// non-waiting allocations should proceeed to vmem_alloc()
 		// immediately
-		if (vmflags & (VM_NOSLEEP | VM_PANIC | VM_ABORT)) {
+		if (slow_vmflags & (VM_NOSLEEP | VM_PANIC | VM_ABORT)) {
 			break;
 		}
 		if (vmem_canalloc_atomic(bvmp, size)) {
-			// We can probably vmem_alloc(bvmp, size, vmflags).
+			// We can probably vmem_alloc(bvmp, size, slow_vmflags).
 			// At worst case it will give us a NULL and we will
 			// end up on the vmp's cv_wait.
 			//
@@ -3425,7 +3449,7 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 	// because waiters was 0 when we entered this function,
 	// subsequent callers will enter the for loop.
 
-	void *m = vmem_alloc(bvmp, size, vmflags);
+	void *m = vmem_alloc(bvmp, size, slow_vmflags);
 
 	// allow another vmem_canalloc() through for this bucket
 	// by atomically turning off the appropriate bit
