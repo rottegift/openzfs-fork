@@ -484,6 +484,9 @@ extern uint64_t spl_xat_late_deny;
 extern uint64_t spl_xat_no_waiters;
 extern uint64_t spl_xft_wait;
 
+extern uint64_t spl_vba_fastpath;
+extern uint64_t spl_vba_fastexit;
+extern uint64_t spl_vba_slowpath;
 extern uint64_t spl_vba_parent_memory_appeared;
 extern uint64_t spl_vba_parent_memory_blocked;
 extern uint64_t spl_vba_hiprio_blocked;
@@ -556,6 +559,9 @@ typedef struct spl_stats {
 	kstat_named_t spl_xat_no_waiters;
 	kstat_named_t spl_xft_wait;
 
+	kstat_named_t spl_vba_fastpath;
+	kstat_named_t spl_vba_fastexit;
+	kstat_named_t spl_vba_slowpath;
 	kstat_named_t spl_vba_parent_memory_appeared;
 	kstat_named_t spl_vba_parent_memory_blocked;
 	kstat_named_t spl_vba_hiprio_blocked;
@@ -627,6 +633,9 @@ static spl_stats_t spl_stats = {
 	{"spl_xat_no_waiters", KSTAT_DATA_UINT64},
 	{"spl_xft_wait", KSTAT_DATA_UINT64},
 
+	{"spl_vba_fastpath", KSTAT_DATA_UINT64},
+	{"spl_vba_fastexit", KSTAT_DATA_UINT64},
+	{"spl_vba_slowpath", KSTAT_DATA_UINT64},
 	{"spl_vba_parent_memory_appeared", KSTAT_DATA_UINT64},
 	{"spl_vba_parent_memory_blocked", KSTAT_DATA_UINT64},
 	{"spl_vba_hiprio_blocked", KSTAT_DATA_UINT64},
@@ -5009,6 +5018,12 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		ks->spl_xat_no_waiters.value.ui64 = spl_xat_no_waiters;
 		ks->spl_xft_wait.value.ui64 = spl_xft_wait;
 
+		ks->spl_vba_fastpath.value.ui64 =
+		    spl_vba_fastpath;
+		ks->spl_vba_fastexit.value.ui64 =
+		    spl_vba_fastexit;
+		ks->spl_vba_slowpath.value.ui64 =
+		    spl_vba_slowpath;
 		ks->spl_vba_parent_memory_appeared.value.ui64 =
 		    spl_vba_parent_memory_appeared;
 		ks->spl_vba_parent_memory_blocked.value.ui64 =

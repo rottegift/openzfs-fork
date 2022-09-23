@@ -418,6 +418,9 @@ uint64_t spl_xat_late_deny = 0;
 uint64_t spl_xat_no_waiters = 0;
 uint64_t spl_xft_wait = 0;
 
+uint64_t spl_vba_fastpath = 0;
+uint64_t spl_vba_fastexit = 0;
+uint64_t spl_vba_slowpath = 0;
 uint64_t spl_vba_parent_memory_appeared = 0;
 uint64_t spl_vba_parent_memory_blocked = 0;
 uint64_t spl_vba_hiprio_blocked = 0;
@@ -3105,6 +3108,18 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 		atomic_inc_64(&spl_bucket_non_pow2_allocs);
 
 	vmem_t *bvmp = vmem_bucket_arena_by_size(size);
+
+	void *fastm = vmem_alloc(bvmp, size, vmflags);
+
+	if (fastm != NULL) {
+		atomic_inc_64(&spl_vba_fastpath);
+		return (fastm);
+	} else if ((vmflags & (VM_NOSLEEP | VM_PANIC | VM_ABORT)) > 0) {
+		atomic_inc_64(&spl_vba_fastexit);
+		return (NULL);
+	}
+
+	atomic_inc_64(&spl_vba_slowpath);
 
 	// there are 13 buckets, so use a 16-bit scalar to hold
 	// a set of bits, where each bit corresponds to an in-progress
