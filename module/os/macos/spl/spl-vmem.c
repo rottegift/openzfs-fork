@@ -2961,9 +2961,21 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		}
 	}
 #else
-	cv_broadcast(&bvmp->vm_cv);
-	spl_xat_lastalloc = gethrtime();
-	return(spl_vmem_malloc_unconditionally_unlocked(size));
+	void *p =  spl_vmem_malloc_unconditionally_unlocked(size);
+
+	if (p != NULL) {
+		spl_xat_lastalloc = gethrtime();
+		cv_broadcast(&bvmp->vm_cv);
+		return (p);
+	}
+
+	extern void spl_set_arc_no_grow(int);
+	spl_set_arc_no_grow(B_TRUE);
+	spl_free_set_emergency_pressure(total_memory >> 7LL);
+	spl_xat_pressured++;
+	kpreempt(KPREEMPT_SYNC);
+	return(NULL);
+
 #endif /* > macOS 12 */
 }
 
@@ -3711,7 +3723,8 @@ vmem_init(const char *heap_name,
 		    MAX(heap_quantum, bucket_largest_size),
 		    xnu_alloc_throttled, xnu_free_throttled,
 		    spl_default_arena_parent,
-		    MAX(heap_quantum * 8, bucket_largest_size * 2),
+//		    MAX(heap_quantum * 8, bucket_largest_size * 2),
+		    MAX(heap_quantum, bucket_largest_size),
 		    VM_SLEEP | VMC_POPULATOR | VMC_NO_QCACHE | VMC_TIMEFREE);
 
 		VERIFY(b != NULL);
