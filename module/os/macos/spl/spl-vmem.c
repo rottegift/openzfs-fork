@@ -3148,7 +3148,7 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 	vmem_t *bvmp = vmem_bucket_arena_by_size(size);
 
 	void *fastm = vmem_alloc(bvmp, size,
-	    (stat_osif_malloc_fail > 0) ? vmflags | VM_BESTFIT : vmflags);
+	    local_hipriority_allocator ? vmflags : vmflags | VM_BESTFIT);
 
 	if (fastm != NULL) {
 		atomic_inc_64(&spl_vba_fastpath);
