@@ -3818,6 +3818,7 @@ zfs_vnop_getnamedstream(struct vnop_getnamedstream_args *ap)
 
 	/* Only regular files */
 	if (!vnode_isreg(vp)) {
+		ZFS_EXIT(zfsvfs);
 		return (EPERM);
 	}
 
