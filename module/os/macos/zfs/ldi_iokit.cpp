@@ -1302,6 +1302,9 @@ buf_strategy_iokit(ldi_buf_t *lbp, struct ldi_handle *lhp)
 
 	IOStorageAttributes	ioattr = { 0 };
 
+	if (lbp->b_flags & B_FUA)
+		ioattr.options = kIOStorageOptionForceUnitAccess;
+
 	/* Synchronous or async */
 	if (lbp->b_iodone == NULL) {
 		UInt64 actualByteCount = 0;
