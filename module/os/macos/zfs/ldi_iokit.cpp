@@ -424,9 +424,15 @@ handle_sync_iokit(struct ldi_handle *lhp)
 #if defined(MAC_OS_X_VERSION_10_11) &&        \
 	(MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_11)
 	/* from module/os/macos/zfs/zfs_vfsops.c */
-	extern uint64_t zfs_vfs_sync_paranoia;
-	/* Issue device sync */
-	IOStorageSynchronizeOptions synctype = (zfs_vfs_sync_paranoia != 0)
+	extern uint64_t zfs_iokit_sync_paranoia;
+	/*
+	 * Issue device sync
+	 *
+	 * We can try to issue a Barrier synch here, which is likely to be
+	 * faster, but also is not supported by all devices.
+	 *
+	 */
+	IOStorageSynchronizeOptions synctype = (zfs_iokit_sync_paranoia != 0)
 	    ? kIOStorageSynchronizeOptionNone
 	    : kIOStorageSynchronizeOptionBarrier;
 	IOReturn ret = LH_MEDIA(lhp)->synchronize(LH_CLIENT(lhp),
