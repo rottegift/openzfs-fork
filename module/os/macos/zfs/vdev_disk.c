@@ -53,7 +53,7 @@ static void vdev_disk_close(vdev_t *);
 
 extern unsigned int spl_split_stack_below;
 
-extern uint64_t zfs_vfs_sync_paranoia;
+extern uint64_t zfs_iokit_sync_paranoia;
 
 typedef struct vdev_disk_ldi_cb {
 	list_node_t		lcb_next;
@@ -520,7 +520,7 @@ vdev_disk_io_strategy(void *arg)
 	case ZIO_TYPE_WRITE:
 		if (zio->io_priority == ZIO_PRIORITY_SYNC_WRITE) {
 			flags = B_WRITE;
-			if (zfs_vfs_sync_paranoia != 0)
+			if (zfs_iokit_sync_paranoia != 0)
 				flags |= B_FUA;
 		} else {
 			flags = B_WRITE | B_ASYNC;
