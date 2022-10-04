@@ -451,6 +451,9 @@ extern uint64_t stat_osif_malloc_fail;
 extern uint64_t stat_osif_malloc_bytes;
 extern uint64_t stat_osif_free;
 extern uint64_t stat_osif_free_bytes;
+extern uint64_t stat_osif_malloc_nonpow2;
+extern uint64_t stat_osif_malloc_nonpow2_big;
+extern uint64_t stat_osif_malloc_realign;
 
 extern uint64_t spl_bucket_non_pow2_allocs;
 
@@ -536,6 +539,9 @@ typedef struct spl_stats {
 	kstat_named_t spl_osif_malloc_bytes;
 	kstat_named_t spl_osif_free;
 	kstat_named_t spl_osif_free_bytes;
+	kstat_named_t spl_osif_malloc_nonpow2;
+	kstat_named_t spl_osif_malloc_nonpow2_big;
+	kstat_named_t spl_osif_malloc_realign;
 	kstat_named_t spl_bucket_non_pow2_allocs;
 
 	kstat_named_t spl_vmem_unconditional_allocs;
@@ -610,6 +616,9 @@ static spl_stats_t spl_stats = {
 	{"spl_osif_malloc_bytes", KSTAT_DATA_UINT64},
 	{"spl_osif_free", KSTAT_DATA_UINT64},
 	{"spl_osif_free_bytes", KSTAT_DATA_UINT64},
+	{"spl_osif_malloc_nonpow2", KSTAT_DATA_UINT64},
+	{"spl_osif_malloc_nonpow2_big", KSTAT_DATA_UINT64},
+	{"spl_osif_malloc_realign", KSTAT_DATA_UINT64},
 	{"spl_bucket_non_pow2_allocs", KSTAT_DATA_UINT64},
 
 	{"vmem_unconditional_allocs", KSTAT_DATA_UINT64},
@@ -4986,6 +4995,13 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		ks->spl_osif_malloc_bytes.value.ui64 = stat_osif_malloc_bytes;
 		ks->spl_osif_free.value.ui64 = stat_osif_free;
 		ks->spl_osif_free_bytes.value.ui64 = stat_osif_free_bytes;
+		ks->spl_osif_malloc_nonpow2.value.ui64 =
+		    stat_osif_malloc_nonpow2;
+		ks->spl_osif_malloc_nonpow2_big.value.ui64 =
+		    stat_osif_malloc_nonpow2_big;
+		ks->spl_osif_malloc_realign.value.ui64 =
+		    stat_osif_malloc_realign;
+
 		ks->spl_bucket_non_pow2_allocs.value.ui64 =
 		    spl_bucket_non_pow2_allocs;
 
