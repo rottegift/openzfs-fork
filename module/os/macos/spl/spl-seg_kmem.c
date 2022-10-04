@@ -144,6 +144,9 @@ uint64_t stat_osif_malloc_fail = 0;
 uint64_t stat_osif_free = 0;
 uint64_t stat_osif_malloc_bytes = 0;
 uint64_t stat_osif_free_bytes = 0;
+uint64_t stat_osif_malloc_nonpow2 = 0;
+uint64_t stat_osif_malloc_nonpow2_big = 0;
+uint64_t stat_osif_malloc_realign = 0;
 #endif
 
 void *
@@ -162,6 +165,13 @@ osif_malloc(uint64_t size)
 	 * and larger ones on the enclosing power of two
 	 * but drop to PAGESIZE for huge allocations
 	 */
+
+	if (!ISP2(size)) {
+		atomic_inc_64(&stat_osif_malloc_nonpow2);
+		if (size > PAGESIZE)
+			atomic_inc_64(&stat_osif_malloc_nonpow2_big);
+	}
+
 	uint64_t align = PAGESIZE;
 	if (size > PAGESIZE && !ISP2(size) && size < UINT32_MAX) {
 		uint64_t v = size;
@@ -176,6 +186,14 @@ osif_malloc(uint64_t size)
 	} else if (size > PAGESIZE && ISP2(size)) {
 		align = size;
 	}
+
+//#ifdef __arm64__
+	/* should this be PAGESIZE? */
+	align = 8; /* smd yolo: on arm we align on 8 bytes */
+//#endif
+
+	if (align != size)
+		atomic_inc_64(&stat_osif_malloc_realign);
 
 	tr = IOMallocAligned(size, MAX(PAGESIZE, align));
 	if (tr != NULL)
