@@ -3712,7 +3712,8 @@ vmem_init(const char *heap_name,
 	spl_default_arena = vmem_create("spl_default_arena", // id 1
 	    initial_default_block, 16ULL*1024ULL*1024ULL,
 	    heap_quantum, spl_vmem_default_alloc, spl_vmem_default_free,
-	    spl_default_arena_parent, 131072,
+	    spl_default_arena_parent,
+	    32, /* minimum import */
 	    VM_SLEEP | VMC_POPULATOR | VMC_NO_QCACHE);
 
 	VERIFY(spl_default_arena != NULL);
@@ -3781,7 +3782,7 @@ vmem_init(const char *heap_name,
 		    heap_quantum,            /* minimum export */
 		    xnu_alloc_throttled, xnu_free_throttled,
 		    spl_default_arena_parent,
-		    bucket_largest_size * 8, /* minimum import */
+		    32, /* minimum import */
 		    VM_SLEEP | VMC_POPULATOR | VMC_NO_QCACHE | VMC_TIMEFREE);
 
 		VERIFY(b != NULL);
@@ -3851,7 +3852,12 @@ vmem_init(const char *heap_name,
 
 	vmem_metadata_arena = vmem_create("vmem_metadata", // id 17
 	    NULL, 0, heap_quantum, vmem_alloc, vmem_free, spl_default_arena,
-	    8 * PAGESIZE, VM_SLEEP | VMC_POPULATOR | VMC_NO_QCACHE);
+#ifdef __arm64__
+	    2 * PAGESIZE,
+#else
+	    8 * PAGESIZE,
+#endif
+	    VM_SLEEP | VMC_POPULATOR | VMC_NO_QCACHE);
 
 	VERIFY(vmem_metadata_arena != NULL);
 
