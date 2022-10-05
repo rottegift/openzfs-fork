@@ -452,8 +452,10 @@ extern uint64_t stat_osif_malloc_bytes;
 extern uint64_t stat_osif_free;
 extern uint64_t stat_osif_free_bytes;
 extern uint64_t stat_osif_malloc_sub128k;
+extern uint64_t stat_osif_malloc_sub64k;
+extern uint64_t stat_osif_malloc_sub32k;
+extern uint64_t stat_osif_malloc_page;
 extern uint64_t stat_osif_malloc_subpage;
-extern uint64_t stat_osif_malloc_subqtrpg;
 
 extern uint64_t spl_bucket_non_pow2_allocs;
 
@@ -539,9 +541,13 @@ typedef struct spl_stats {
 	kstat_named_t spl_osif_malloc_bytes;
 	kstat_named_t spl_osif_free;
 	kstat_named_t spl_osif_free_bytes;
+
 	kstat_named_t spl_osif_malloc_sub128k;
+	kstat_named_t spl_osif_malloc_sub64k;
+	kstat_named_t spl_osif_malloc_sub32k;
+	kstat_named_t spl_osif_malloc_page;
 	kstat_named_t spl_osif_malloc_subpage;
-	kstat_named_t spl_osif_malloc_subqtrpg;
+
 	kstat_named_t spl_bucket_non_pow2_allocs;
 
 	kstat_named_t spl_vmem_unconditional_allocs;
@@ -616,9 +622,13 @@ static spl_stats_t spl_stats = {
 	{"spl_osif_malloc_bytes", KSTAT_DATA_UINT64},
 	{"spl_osif_free", KSTAT_DATA_UINT64},
 	{"spl_osif_free_bytes", KSTAT_DATA_UINT64},
+
 	{"spl_osif_malloc_sub128k", KSTAT_DATA_UINT64},
+	{"spl_osif_malloc_sub64k", KSTAT_DATA_UINT64},
+	{"spl_osif_malloc_sub32k", KSTAT_DATA_UINT64},
+	{"spl_osif_malloc_age", KSTAT_DATA_UINT64},
 	{"spl_osif_malloc_subpage", KSTAT_DATA_UINT64},
-	{"spl_osif_malloc_subqtrpg", KSTAT_DATA_UINT64},
+
 	{"spl_bucket_non_pow2_allocs", KSTAT_DATA_UINT64},
 
 	{"vmem_unconditional_allocs", KSTAT_DATA_UINT64},
@@ -4994,12 +5004,17 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		ks->spl_osif_malloc_bytes.value.ui64 = stat_osif_malloc_bytes;
 		ks->spl_osif_free.value.ui64 = stat_osif_free;
 		ks->spl_osif_free_bytes.value.ui64 = stat_osif_free_bytes;
+
 		ks->spl_osif_malloc_sub128k.value.ui64 =
 		    stat_osif_malloc_sub128k;
+		ks->spl_osif_malloc_sub64k.value.ui64 =
+		    stat_osif_malloc_sub64k;
+		ks->spl_osif_malloc_sub32k.value.ui64 =
+		    stat_osif_malloc_sub32k;
+		ks->spl_osif_malloc_page.value.ui64 =
+		    stat_osif_malloc_page;
 		ks->spl_osif_malloc_subpage.value.ui64 =
 		    stat_osif_malloc_subpage;
-		ks->spl_osif_malloc_subqtrpg.value.ui64 =
-		    stat_osif_malloc_subqtrpg;
 
 		ks->spl_bucket_non_pow2_allocs.value.ui64 =
 		    spl_bucket_non_pow2_allocs;
