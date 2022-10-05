@@ -454,6 +454,10 @@ extern void spl_free_set_emergency_pressure(int64_t p);
 extern uint64_t segkmem_total_mem_allocated;
 extern uint64_t total_memory;
 
+extern _Atomic uint64_t spl_dynamic_memory_cap;
+extern uint64_t spl_dynamic_memory_cap_reductions;
+
+
 extern void IOSleep(unsigned milliseconds);
 
 /*

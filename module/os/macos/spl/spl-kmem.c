@@ -70,6 +70,12 @@ static volatile _Atomic boolean_t spl_free_fast_pressure = FALSE;
 static _Atomic bool spl_free_maybe_reap_flag = false;
 static _Atomic uint64_t spl_free_last_pressure = 0;
 
+static uint64_t spl_enforce_memory_caps = 1;
+_Atomic uint64_t spl_dynamic_memory_cap = 0;
+uint64_t spl_dynamic_memory_cap_reductions = 0;
+static uint64_t spl_manual_memory_cap = 0;
+static uint64_t spl_memory_cap_enforcements = 0;
+
 /*
  * variables informed by "pure"  mach_vm_pressure interface
  *
@@ -542,6 +548,12 @@ typedef struct spl_stats {
 	kstat_named_t spl_osif_free;
 	kstat_named_t spl_osif_free_bytes;
 
+	kstat_named_t spl_enforce_memory_caps;
+	kstat_named_t spl_dynamic_memory_cap;
+	kstat_named_t spl_dynamic_memory_cap_reductions;
+	kstat_named_t spl_manual_memory_cap;
+	kstat_named_t spl_memory_cap_enforcements;
+
 	kstat_named_t spl_osif_malloc_sub128k;
 	kstat_named_t spl_osif_malloc_sub64k;
 	kstat_named_t spl_osif_malloc_sub32k;
@@ -622,6 +634,12 @@ static spl_stats_t spl_stats = {
 	{"spl_osif_malloc_bytes", KSTAT_DATA_UINT64},
 	{"spl_osif_free", KSTAT_DATA_UINT64},
 	{"spl_osif_free_bytes", KSTAT_DATA_UINT64},
+
+	{"spl_osif_enforce_memory_caps", KSTAT_DATA_UINT64},
+	{"spl_osif_dynamic_memory_cap", KSTAT_DATA_UINT64},
+	{"spl_osif_dynamic_memory_cap_reductions", KSTAT_DATA_UINT64},
+	{"spl_osif_manual_memory_cap", KSTAT_DATA_UINT64},
+	{"spl_osif_memory_cap_enforcements", KSTAT_DATA_UINT64},
 
 	{"spl_osif_malloc_sub128k", KSTAT_DATA_UINT64},
 	{"spl_osif_malloc_sub64k", KSTAT_DATA_UINT64},
@@ -4986,6 +5004,23 @@ spl_kstat_update(kstat_t *ksp, int rw)
 			    ks->spl_split_stack_below.value.ui64;
 		}
 
+		if (ks->spl_enforce_memory_caps.value.ui64 !=
+		    spl_enforce_memory_caps) {
+			spl_enforce_memory_caps =
+			    ks->spl_enforce_memory_caps.value.ui64;
+		}
+
+		if (ks->spl_manual_memory_cap.value.ui64 !=
+		    spl_manual_memory_cap) {
+			uint64_t v =
+			    ks->spl_manual_memory_cap.value.ui64;
+			if (v < total_memory >> 3)
+				v = total_memory >> 3;
+			else if (v > total_memory)
+				v = 0;
+			spl_manual_memory_cap = v;
+		}
+
 	} else {
 		ks->spl_os_alloc.value.ui64 = segkmem_total_mem_allocated;
 		ks->spl_active_threads.value.ui64 = zfs_threads;
@@ -5004,6 +5039,17 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		ks->spl_osif_malloc_bytes.value.ui64 = stat_osif_malloc_bytes;
 		ks->spl_osif_free.value.ui64 = stat_osif_free;
 		ks->spl_osif_free_bytes.value.ui64 = stat_osif_free_bytes;
+
+		ks->spl_enforce_memory_caps.value.ui64 =
+		    spl_enforce_memory_caps;
+		ks->spl_dynamic_memory_cap.value.ui64 =
+		    spl_dynamic_memory_cap;
+		ks->spl_dynamic_memory_cap_reductions.value.ui64 =
+		    spl_dynamic_memory_cap_reductions;
+		ks->spl_manual_memory_cap.value.ui64 =
+		    spl_manual_memory_cap;
+		ks->spl_memory_cap_enforcements.value.ui64 =
+		    spl_memory_cap_enforcements;
 
 		ks->spl_osif_malloc_sub128k.value.ui64 =
 		    stat_osif_malloc_sub128k;
