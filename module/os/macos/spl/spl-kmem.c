@@ -4801,7 +4801,6 @@ spl_free_thread()
 		// adjust for available memory in spl_heap_arena
 		// cf arc_available_memory()
 		if (!emergency_lowmem) {
-			extern vmem_t *spl_default_arena;
 			int64_t heap_free = (int64_t)vmem_size_semi_atomic(
 			    spl_heap_arena, VMEM_FREE);
 			// grabbed buckets_free up above; we are OK with
