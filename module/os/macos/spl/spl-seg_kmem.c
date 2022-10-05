@@ -145,8 +145,10 @@ uint64_t stat_osif_free = 0;
 uint64_t stat_osif_malloc_bytes = 0;
 uint64_t stat_osif_free_bytes = 0;
 uint64_t stat_osif_malloc_sub128k = 0;
+uint64_t stat_osif_malloc_sub64k = 0;
+uint64_t stat_osif_malloc_sub32k = 0;
+uint64_t stat_osif_malloc_page = 0;
 uint64_t stat_osif_malloc_subpage = 0;
-uint64_t stat_osif_malloc_subqtrpg = 0;
 #endif
 
 void *
@@ -160,42 +162,24 @@ osif_malloc(uint64_t size)
 	// kern_return_t kr = kmem_alloc(kernel_map, &tr, size);
 	// tr = IOMalloc(size);
 
-	if (size < 131072)
-		atomic_inc_64(&stat_osif_malloc_sub128k);
 	if (size < PAGESIZE)
 		atomic_inc_64(&stat_osif_malloc_subpage);
-	if (size < (PAGESIZE >> 2))
-		atomic_inc_64(&stat_osif_malloc_subqtrpg);
+	else if (size == PAGESIZE)
+		atomic_inc_64(&stat_osif_malloc_page);
+	else if (size < 32768)
+		atomic_inc_64(&stat_osif_malloc_sub32k);
+	else if (size < 65536)
+		atomic_inc_64(&stat_osif_malloc_sub64k);
+	else if (size < 131072)
+		atomic_inc_64(&stat_osif_malloc_sub128k);
 
-#if 0
 	/*
-	 * align small allocations on PAGESIZE
-	 * and larger ones on the enclosing power of two
-	 * but drop to PAGESIZE for huge allocations
+	 * On Intel and ARM we can deal with eight-byte-aligned pointers from
+	 * IOMallocAligned().  Larger alignment may be faster, but may also
+	 * cause problems when we have a system with very large RAM that we
+	 * want to use for ARC and other zfs purposes.
 	 */
-	uint64_t align = PAGESIZE;
-	if (size > PAGESIZE && !ISP2(size) && size < UINT32_MAX) {
-		uint64_t v = size;
-		v--;
-		v |= v >> 1;
-		v |= v >> 2;
-		v |= v >> 4;
-		v |= v >> 8;
-		v |= v >> 16;
-		v++;
-		align = v;
-	} else if (size > PAGESIZE && ISP2(size)) {
-		align = size;
-	}
-
-#endif /* 0 */
-//#ifdef __arm64__
-	/*
-	 * previously we used at least PAGESIZE
-	 * which caused Ultra panics
-	 */
-	const uint64_t align = 8; /* smd yolo: on arm we align on 8 bytes */
-//#endif
+	const uint64_t align = 8;
 
 	tr = IOMallocAligned(size, align);
 	if (tr != NULL)
