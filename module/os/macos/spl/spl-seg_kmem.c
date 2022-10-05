@@ -144,9 +144,9 @@ uint64_t stat_osif_malloc_fail = 0;
 uint64_t stat_osif_free = 0;
 uint64_t stat_osif_malloc_bytes = 0;
 uint64_t stat_osif_free_bytes = 0;
-uint64_t stat_osif_malloc_nonpow2 = 0;
-uint64_t stat_osif_malloc_nonpow2_big = 0;
-uint64_t stat_osif_malloc_realign = 0;
+uint64_t stat_osif_malloc_sub128k = 0;
+uint64_t stat_osif_malloc_subpage = 0;
+uint64_t stat_osif_malloc_subqtrpg = 0;
 #endif
 
 void *
@@ -160,18 +160,19 @@ osif_malloc(uint64_t size)
 	// kern_return_t kr = kmem_alloc(kernel_map, &tr, size);
 	// tr = IOMalloc(size);
 
+	if (size < 131072)
+		atomic_inc_64(&stat_osif_malloc_sub128k);
+	if (size < PAGESIZE)
+		atomic_inc_64(&stat_osif_malloc_subpage);
+	if (size < (PAGESIZE >> 2))
+		atomic_inc_64(&stat_osif_malloc_subqtrpg);
+
+#if 0
 	/*
 	 * align small allocations on PAGESIZE
 	 * and larger ones on the enclosing power of two
 	 * but drop to PAGESIZE for huge allocations
 	 */
-
-	if (!ISP2(size)) {
-		atomic_inc_64(&stat_osif_malloc_nonpow2);
-		if (size > PAGESIZE)
-			atomic_inc_64(&stat_osif_malloc_nonpow2_big);
-	}
-
 	uint64_t align = PAGESIZE;
 	if (size > PAGESIZE && !ISP2(size) && size < UINT32_MAX) {
 		uint64_t v = size;
@@ -187,15 +188,16 @@ osif_malloc(uint64_t size)
 		align = size;
 	}
 
+#endif /* 0 */
 //#ifdef __arm64__
-	/* should this be PAGESIZE? */
-	align = 8; /* smd yolo: on arm we align on 8 bytes */
+	/*
+	 * previously we used at least PAGESIZE
+	 * which caused Ultra panics
+	 */
+	const uint64_t align = 8; /* smd yolo: on arm we align on 8 bytes */
 //#endif
 
-	if (align != size)
-		atomic_inc_64(&stat_osif_malloc_realign);
-
-	tr = IOMallocAligned(size, MAX(PAGESIZE, align));
+	tr = IOMallocAligned(size, align);
 	if (tr != NULL)
 		kr = KERN_SUCCESS;
 
