@@ -331,15 +331,6 @@ constrain_path() {
 		ln -fs /usr/sbin/createhomedir "$STF_PATH/createhomedir"
 		[ -f "/usr/local/bin/gdd" ] && ln -fs /usr/local/bin/gdd "$STF_PATH/dd"
 		[ -f "/usr/local/bin/gsed" ] && ln -fs /usr/local/bin/gsed "$STF_PATH/gsed"
-		DYLD_LIBRARY_PATH=$STF_SUITE/cmd/librt/.libs:$DYLD_LIBRARY_PATH
-		export DYLD_LIBRARY_PATH
-		# Tell ZFS to not to use /Volumes
-		__ZFS_MAIN_MOUNTPOINT_DIR=/
-		export __ZFS_MAIN_MOUNTPOINT_DIR
-		# Catalina and up has root as read/only.
-		# BigSur gets even harder.
-		sudo /sbin/mount -uw /
-		export SHELL=ksh
 	fi
 }
 
@@ -566,6 +557,17 @@ fi
 [ -e "$STF_SUITE/include/default.cfg" ] || fail \
     "Missing $STF_SUITE/include/default.cfg file."
 
+if [ "$UNAME" = "Darwin" ]; then
+	DYLD_LIBRARY_PATH=$STF_SUITE/cmd/librt/.libs:$DYLD_LIBRARY_PATH
+	export DYLD_LIBRARY_PATH
+	# Tell ZFS to not to use /Volumes
+	__ZFS_MAIN_MOUNTPOINT_DIR=/
+	export __ZFS_MAIN_MOUNTPOINT_DIR
+	# Catalina and up has root as read/only.
+	# BigSur gets even harder.
+	sudo /sbin/mount -uw /
+	export SHELL=ksh
+fi
 #
 # Verify the ZFS module stack is loaded.
 #
