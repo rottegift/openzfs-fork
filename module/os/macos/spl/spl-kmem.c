@@ -4285,10 +4285,25 @@ kmem_cache_fini()
 	list_destroy(&freelist);
 }
 
-// this is intended to substitute for kmem_avail() in arc.c
+// this is intended to substitute for kmem_avail() in arc_os.c
 int64_t
 spl_free_wrapper(void)
 {
+	if (spl_free >= 0
+	    && spl_enforce_memory_caps != 0) {
+		if (segkmem_total_mem_allocated >=
+		    spl_dynamic_memory_cap) {
+			spl_free = spl_dynamic_memory_cap -
+			    segkmem_total_mem_allocated;
+			atomic_inc_64(&spl_memory_cap_enforcements);
+		} else if (spl_manual_memory_cap > 0 &&
+		    segkmem_total_mem_allocated >= spl_manual_memory_cap) {
+			spl_free = spl_manual_memory_cap -
+			    segkmem_total_mem_allocated;
+			atomic_inc_64(&spl_memory_cap_enforcements);
+		}
+	}
+
 	return (spl_free);
 }
 
@@ -4488,6 +4503,8 @@ spl_free_thread()
 	spl_free = MAX(4*1024*1024*1024,
 	    total_memory * 75ULL / 100ULL);
 
+	spl_dynamic_memory_cap = total_memory;
+
 	mutex_enter(&spl_free_thread_lock);
 
 	dprintf("SPL: beginning spl_free_thread() loop, spl_free == %lld\n",
@@ -4636,6 +4653,30 @@ spl_free_thread()
 			if (spl_free_fast_pressure) {
 				emergency_lowmem = true;
 				new_spl_free -= old_pressure * 4LL;
+			}
+		}
+
+		/*
+		 * Pressure and declare zero free memory if we are above
+		 * memory caps.  This is not the hardest enforcement
+		 * mechanism, so see also enforcement in spl_free_wrapper()
+		 */
+		if (spl_enforce_memory_caps) {
+			if (segkmem_total_mem_allocated >=
+			    spl_dynamic_memory_cap) {
+				lowmem = true;
+				emergency_lowmem = true;
+				if (new_spl_free >= 0)
+					new_spl_free = -1024LL;
+				atomic_inc_64(&spl_memory_cap_enforcements);
+			} else if (spl_manual_memory_cap > 0 &&
+			    segkmem_total_mem_allocated >=
+			    spl_manual_memory_cap) {
+				lowmem = true;
+				emergency_lowmem = true;
+				if (new_spl_free >= 0)
+					new_spl_free = -1024LL;
+				atomic_inc_64(&spl_memory_cap_enforcements);
 			}
 		}
 
