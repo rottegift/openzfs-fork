@@ -5062,6 +5062,19 @@ spl_kstat_update(kstat_t *ksp, int rw)
 			spl_manual_memory_cap = v;
 		}
 
+		if (ks->spl_dynamic_memory_cap.value.ui64 !=
+		    spl_dynamic_memory_cap) {
+			uint64_t v =
+			    ks->spl_dynamic_memory_cap.value.ui64;
+			if (v == 0)
+				v = total_memory;
+			else if (v < total_memory >> 3)
+				v = total_memory >> 3;
+			else if (v > total_memory)
+				v = total_memory;
+			spl_dynamic_memory_cap = v;
+		}
+
 	} else {
 		ks->spl_os_alloc.value.ui64 = segkmem_total_mem_allocated;
 		ks->spl_active_threads.value.ui64 = zfs_threads;
