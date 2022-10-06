@@ -457,7 +457,6 @@ extern uint64_t total_memory;
 extern _Atomic uint64_t spl_dynamic_memory_cap;
 extern uint64_t spl_dynamic_memory_cap_reductions;
 
-
 extern void IOSleep(unsigned milliseconds);
 
 /*
@@ -2988,6 +2987,11 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 
 	success_ct = 0;
 	fail_at = segkmem_total_mem_allocated - size;
+
+	if (fail_at < spl_dynamic_memory_cap) {
+		spl_dynamic_memory_cap = fail_at;
+		atomic_inc_64(&spl_dynamic_memory_cap_reductions);
+	}
 
 	/* wait until used memory falls below failure_at */
 
