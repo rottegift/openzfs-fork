@@ -6256,11 +6256,11 @@ spa_import(char *pool, nvlist_t *config, nvlist_t *props, uint64_t flags)
 
 	spa_event_notify(spa, NULL, NULL, ESC_ZFS_POOL_IMPORT);
 
+	spa_import_os(spa);
+
 	mutex_exit(&spa_namespace_lock);
 
 	zvol_create_minors_recursive(pool);
-
-	spa_import_os(spa);
 
 	return (0);
 }
