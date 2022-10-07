@@ -12,11 +12,11 @@
 
 ZVOL_ROOT="/var/run/zfs/zvol"
 
-rm -f "${ZVOL_ROOT}/rdsk/${ZEVENT_POOL}/${ZEVENT_DATASET}" "${ZVOL_ROOT}/dsk/${ZEVENT_POOL}/${ZEVENT_DATASET}"
-rmdir "$(dirname "${ZVOL_ROOT}/rdsk/${ZEVENT_POOL}/${ZEVENT_DATASET}")" "$(dirname "${ZVOL_ROOT}/dsk/${ZEVENT_POOL}/${ZEVENT_DATASET}")"
+rm -f "${ZVOL_ROOT}/rdsk/${ZEVENT_POOL}/${ZEVENT_VOLUME}" "${ZVOL_ROOT}/dsk/${ZEVENT_POOL}/${ZEVENT_VOLUME}"
+rmdir "$(dirname "${ZVOL_ROOT}/rdsk/${ZEVENT_POOL}/${ZEVENT_VOLUME}")" "$(dirname "${ZVOL_ROOT}/dsk/${ZEVENT_POOL}/${ZEVENT_VOLUME}")"
 
 logger -t "${ZED_SYSLOG_TAG:=zed}" -p "${ZED_SYSLOG_PRIORITY:=daemon.notice}" \
 	eid="${ZEVENT_EID}" class="${ZEVENT_SUBCLASS}" \
-	"${ZEVENT_POOL:+pool=$ZEVENT_POOL}/${ZEVENT_DATASET} removed symlink"
+	"${ZEVENT_POOL:+pool=$ZEVENT_POOL}/${ZEVENT_VOLUME} removed symlink"
 
 echo 0
