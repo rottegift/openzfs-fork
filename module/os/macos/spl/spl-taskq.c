@@ -1610,7 +1610,10 @@ taskq_dispatch_ent(taskq_t *tq, task_func_t func, void *arg, uint_t flags,
 int
 taskq_empty_ent(taskq_ent_t *t)
 {
-	return (IS_EMPTY(*t));
+	if (t->tqent_prev == NULL && t->tqent_next == NULL)
+		return (TRUE);
+	else
+		return (IS_EMPTY(*t));
 }
 
 /*
