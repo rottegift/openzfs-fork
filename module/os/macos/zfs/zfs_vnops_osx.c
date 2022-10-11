@@ -3561,6 +3561,7 @@ zfs_vnop_getxattr(struct vnop_getxattr_args *ap)
 	boolean_t is_finderinfo = B_FALSE;
 	int  error = 0;
 	uint64_t resid = ap->a_uio ? zfs_uio_resid(uio) : 0;
+	ssize_t retsize;
 
 	dprintf("%s: vp %p: '%s'\n", __func__, ap->a_vp, ap->a_name);
 
@@ -3594,13 +3595,13 @@ zfs_vnop_getxattr(struct vnop_getxattr_args *ap)
 
 
 	error = zpl_xattr_get(vp, ap->a_name,
-	    is_finderinfo ? &local_uio : uio, cr);
+	    is_finderinfo ? &local_uio : uio, &retsize, cr);
 
-	if (error < 0)
-		return (-error);
+	if (error != 0)
+		return (error);
 
 	if (ap->a_size)
-		*ap->a_size = error;
+		*ap->a_size = retsize;
 
 	if (is_finderinfo) {
 
@@ -3618,7 +3619,7 @@ zfs_vnop_getxattr(struct vnop_getxattr_args *ap)
 	}
 
 
-	dprintf("%s: return 0 size %d\n", __func__, error);
+	dprintf("%s: return 0 size %d\n", __func__, retsize);
 
 	return (0);
 }
@@ -3767,6 +3768,7 @@ zfs_vnop_listxattr(struct vnop_listxattr_args *ap)
 	znode_t  *zp = VTOZ(vp);
 	zfsvfs_t  *zfsvfs = zp->z_zfsvfs;
 	int  error = 0;
+	ssize_t retsize;
 
 	dprintf("+listxattr vp %p: resid %lu\n", ap->a_vp, zfs_uio_resid(uio));
 
@@ -3780,15 +3782,15 @@ zfs_vnop_listxattr(struct vnop_listxattr_args *ap)
 	 * Note they return negative errors; ie -ERANGE
 	 * Positive for size of xattr.
 	 */
-	error = zpl_xattr_list(vp, uio, cr);
+	error = zpl_xattr_list(vp, uio, &retsize, cr);
 
-	if (error < 0) {
-		return (-error);
-	}
+	if (error != 0)
+		return (error);
 
 	if (ap->a_size != NULL)
-		*ap->a_size = error;
+		*ap->a_size = retsize;
 
+	dprintf("%s: size %lu\n", __func__, retsize);
 	return (0);
 }
 

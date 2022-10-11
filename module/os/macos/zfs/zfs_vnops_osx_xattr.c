@@ -89,13 +89,24 @@
 #include <sys/zpl.h>
 #include <sys/xattr.h>
 
-#define	XATTR_USER_PREFIX "user."
+#define	XATTR_USER_PREFIX		"macos:"
+#define	XATTR_USER_PREFIX_LEN	strlen("macos:")
 
-static int
+enum xattr_permission {
+	XAPERM_DENY,
+	XAPERM_ALLOW,
+	XAPERM_COMPAT,
+};
+
+static unsigned int zfs_xattr_compat = 0;
+
+static enum xattr_permission
 zpl_xattr_permission(struct vnode *dvp, zfs_uio_t *uio, const char *name,
     int name_len)
 {
-	return (1);
+	if (xattr_protected(name))
+		return (XAPERM_DENY);
+	return (zfs_xattr_compat ? XAPERM_COMPAT : XAPERM_ALLOW);
 }
 
 /*
@@ -106,25 +117,34 @@ static int
 zpl_xattr_filldir(struct vnode *dvp, zfs_uio_t *uio, const char *name,
     int name_len)
 {
+	enum xattr_permission perm;
 
 	/* Check permissions using the per-namespace list xattr handler. */
-	if (!zpl_xattr_permission(dvp, uio, name, name_len))
+	perm = zpl_xattr_permission(dvp, uio, name, name_len);
+	if (perm == XAPERM_DENY)
 		return (0);
 
-	if (xattr_protected(name))
-		return (0);
+	/* If it starts with "macos:", skip past it. */
+	if (perm == XAPERM_COMPAT) {
+		if (name_len >= XATTR_USER_PREFIX_LEN &&
+		    strncmp(XATTR_USER_PREFIX, name,
+		    XATTR_USER_PREFIX_LEN) == 0) {
+			name += XATTR_USER_PREFIX_LEN;
+			name_len -= XATTR_USER_PREFIX_LEN;
+		}
+	}
 
 	/* When resid is 0 only calculate the required size. */
-	if (uio == NULL || zfs_uio_resid(uio) > 0) {
-		if (name_len + 1 > zfs_uio_resid(uio))
-			return (-ERANGE);
-
-		zfs_uiomove((void *)name, name_len + 1, UIO_READ, uio);
-
-	} else {
-
-		zfs_uio_setoffset(uio, zfs_uio_offset(uio) + name_len + 1);
+	if (uio == NULL || zfs_uio_resid(uio) == 0) {
+		zfs_uio_setoffset(uio, zfs_uio_offset(uio) +
+		    name_len + 1);
+		return (0);
 	}
+
+	if (name_len + 1 > zfs_uio_resid(uio))
+		return (ERANGE);
+
+	zfs_uiomove((void *)name, name_len + 1, UIO_READ, uio);
 
 	return (0);
 }
@@ -142,15 +162,16 @@ zpl_xattr_readdir(struct vnode *dxip, struct vnode *dvp, zfs_uio_t *uio)
 
 	zap_cursor_init(&zc, ITOZSB(dxip)->z_os, ITOZ(dxip)->z_id);
 
-	while ((error = -zap_cursor_retrieve(&zc, &zap)) == 0) {
+	while ((error = zap_cursor_retrieve(&zc, &zap)) == 0) {
 
 		if (zap.za_integer_length != 8 || zap.za_num_integers != 1) {
-			error = -ENXIO;
+			error = ENXIO;
 			break;
 		}
 
 		error = zpl_xattr_filldir(dvp, uio,
 		    zap.za_name, strlen(zap.za_name));
+
 		if (error)
 			break;
 
@@ -159,7 +180,7 @@ zpl_xattr_readdir(struct vnode *dxip, struct vnode *dvp, zfs_uio_t *uio)
 
 	zap_cursor_fini(&zc);
 
-	if (error == -ENOENT)
+	if (error == ENOENT)
 		error = 0;
 
 	return (error);
@@ -173,12 +194,11 @@ zpl_xattr_list_dir(struct vnode *dvp, zfs_uio_t *uio, cred_t *cr)
 	int error;
 
 	/* Lookup the xattr directory */
-	error = -zfs_lookup(ITOZ(dvp), NULL, &dxzp, LOOKUP_XATTR,
+	error = zfs_lookup(ITOZ(dvp), NULL, &dxzp, LOOKUP_XATTR,
 	    cr, NULL, NULL);
 	if (error) {
-		if (error == -ENOENT)
+		if (error == ENOENT)
 			error = 0;
-
 		return (error);
 	}
 
@@ -218,8 +238,8 @@ zpl_xattr_list_sa(struct vnode *dvp, zfs_uio_t *uio)
 	return (0);
 }
 
-ssize_t
-zpl_xattr_list(struct vnode *dvp, zfs_uio_t *uio, cred_t *cr)
+int
+zpl_xattr_list(struct vnode *dvp, zfs_uio_t *uio, ssize_t *size, cred_t *cr)
 {
 	znode_t *zp = ITOZ(dvp);
 	zfsvfs_t *zfsvfs = ZTOZSB(zp);
@@ -239,7 +259,9 @@ zpl_xattr_list(struct vnode *dvp, zfs_uio_t *uio, cred_t *cr)
 	if (error)
 		goto out;
 
-	error = zfs_uio_offset(uio);
+	if (size) {
+		*size = zfs_uio_offset(uio);
+	}
 out:
 
 	rw_exit(&zp->z_xattr_lock);
@@ -250,39 +272,38 @@ out:
 
 static int
 zpl_xattr_get_dir(struct vnode *ip, const char *name, zfs_uio_t *uio,
-    cred_t *cr)
+    ssize_t *size, cred_t *cr)
 {
-	struct vnode *xip = NULL;
 	znode_t *dxzp = NULL;
 	znode_t *xzp = NULL;
 	int error;
 
 	/* Lookup the xattr directory */
-	error = -zfs_lookup(ITOZ(ip), NULL, &dxzp, LOOKUP_XATTR,
+	error = zfs_lookup(ITOZ(ip), NULL, &dxzp, LOOKUP_XATTR,
 	    cr, NULL, NULL);
 	if (error)
 		goto out;
 
 	/* Lookup a specific xattr name in the directory */
-	error = -zfs_lookup(dxzp, (char *)name, &xzp, 0, cr, NULL, NULL);
+	error = zfs_lookup(dxzp, (char *)name, &xzp, 0, cr, NULL, NULL);
 	if (error)
 		goto out;
 
-	xip = ZTOI(xzp);
 	if (uio == NULL || !zfs_uio_resid(uio)) {
-		error = xzp->z_size;
+		if (size)
+			*size = xzp->z_size;
 		goto out;
 	}
 
 	if (zfs_uio_resid(uio) < xzp->z_size) {
-		error = -ERANGE;
+		error = ERANGE;
 		goto out;
 	}
 
-	error = -zfs_read(ITOZ(xip), uio, 0, cr);
+	error = zfs_read(xzp, uio, 0, cr);
 
-	if (error == 0)
-		error = zfs_uio_resid(uio);
+	if (size)
+		*size = zfs_uio_resid(uio);
 out:
 	if (xzp)
 		zrele(xzp);
@@ -294,7 +315,8 @@ out:
 }
 
 static int
-zpl_xattr_get_sa(struct vnode *ip, const char *name, zfs_uio_t *uio)
+zpl_xattr_get_sa(struct vnode *ip, const char *name, zfs_uio_t *uio,
+    ssize_t *size)
 {
 	znode_t *zp = ITOZ(ip);
 	uchar_t *nv_value;
@@ -305,32 +327,37 @@ zpl_xattr_get_sa(struct vnode *ip, const char *name, zfs_uio_t *uio)
 
 	mutex_enter(&zp->z_lock);
 	if (zp->z_xattr_cached == NULL)
-		error = -zfs_sa_get_xattr(zp);
+		error = zfs_sa_get_xattr(zp);
 	mutex_exit(&zp->z_lock);
 
 	if (error)
 		return (error);
 
 	ASSERT(zp->z_xattr_cached);
-	error = -nvlist_lookup_byte_array(zp->z_xattr_cached, name,
+	error = nvlist_lookup_byte_array(zp->z_xattr_cached, name,
 	    &nv_value, &nv_size);
 	if (error)
 		return (error);
 
-	if (uio == NULL || zfs_uio_resid(uio) == 0)
-		return (nv_size);
+	if (uio == NULL || zfs_uio_resid(uio) == 0) {
+		if (size)
+			*size = nv_size;
+		return (0);
+	}
 
 	if (zfs_uio_resid(uio) < nv_size)
-		return (-ERANGE);
+		return (ERANGE);
 
 	zfs_uiomove(nv_value, nv_size, UIO_READ, uio);
 
-	return (nv_size);
+	if (size)
+		*size = nv_size;
+	return (0);
 }
 
 static int
 __zpl_xattr_get(struct vnode *ip, const char *name, zfs_uio_t *uio,
-    cred_t *cr)
+    ssize_t *retsize, cred_t *cr)
 {
 	znode_t *zp = ITOZ(ip);
 	zfsvfs_t *zfsvfs = ZTOZSB(zp);
@@ -339,15 +366,16 @@ __zpl_xattr_get(struct vnode *ip, const char *name, zfs_uio_t *uio,
 	ASSERT(RW_LOCK_HELD(&zp->z_xattr_lock));
 
 	if (zfsvfs->z_use_sa && zp->z_is_sa) {
-		error = zpl_xattr_get_sa(ip, name, uio);
-		if (error != -ENOENT)
+		error = zpl_xattr_get_sa(ip, name, uio, retsize);
+		if (error != ENOENT)
 			goto out;
 	}
 
-	error = zpl_xattr_get_dir(ip, name, uio, cr);
+	error = zpl_xattr_get_dir(ip, name, uio, retsize, cr);
+
 out:
-	if (error == -ENOENT)
-		error = -ENOATTR;
+	if (error == ENOENT)
+		error = ENOATTR;
 
 	return (error);
 }
@@ -362,37 +390,40 @@ __zpl_xattr_where(struct vnode *ip, const char *name, int *where, cred_t *cr)
 	znode_t *zp = ITOZ(ip);
 	zfsvfs_t *zfsvfs = ZTOZSB(zp);
 	int error;
+	ssize_t retsize;
 
 	ASSERT(where);
 	ASSERT(RW_LOCK_HELD(&zp->z_xattr_lock));
 
 	*where = XATTR_NOENT;
 	if (zfsvfs->z_use_sa && zp->z_is_sa) {
-		error = zpl_xattr_get_sa(ip, name, NULL);
-		if (error >= 0)
+		error = zpl_xattr_get_sa(ip, name, NULL, &retsize);
+		if (error == 0)
 			*where |= XATTR_IN_SA;
-		else if (error != -ENOENT)
+		else if (error != ENOENT)
 			return (error);
 	}
 
-	error = zpl_xattr_get_dir(ip, name, NULL, cr);
-	if (error >= 0)
+	error = zpl_xattr_get_dir(ip, name, NULL, &retsize, cr);
+	if (error == 0)
 		*where |= XATTR_IN_DIR;
-	else if (error != -ENOENT)
+	else if (error != ENOENT)
 		return (error);
 
 	if (*where == (XATTR_IN_SA|XATTR_IN_DIR))
 		cmn_err(CE_WARN, "ZFS: inode %p has xattr \"%s\""
 		    " in both SA and dir", ip, name);
 	if (*where == XATTR_NOENT)
-		error = -ENOATTR;
+		error = ENOATTR;
 	else
 		error = 0;
+
 	return (error);
 }
 
 int
-zpl_xattr_get(struct vnode *ip, const char *name, zfs_uio_t *uio, cred_t *cr)
+zpl_xattr_get(struct vnode *ip, const char *name, zfs_uio_t *uio,
+    ssize_t *retsize, cred_t *cr)
 {
 	znode_t *zp = ITOZ(ip);
 	zfsvfs_t *zfsvfs = ZTOZSB(zp);
@@ -400,8 +431,21 @@ zpl_xattr_get(struct vnode *ip, const char *name, zfs_uio_t *uio, cred_t *cr)
 
 	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
 		return (error);
+
 	rw_enter(&zp->z_xattr_lock, RW_READER);
-	error = __zpl_xattr_get(ip, name, uio, cr);
+	/*
+	 * Try to look up the name with the namespace prefix first for
+	 * compatibility with xattrs from this platform.  If that fails,
+	 * try again without the namespace prefix for compatibility with
+	 * other platforms.
+	 */
+	char *xattr_name = kmem_asprintf("%s%s", XATTR_USER_PREFIX, name);
+	error = __zpl_xattr_get(ip, xattr_name, uio, retsize, cr);
+	kmem_strfree(xattr_name);
+
+	if (error == ENOATTR)
+		error = __zpl_xattr_get(ip, name, uio, retsize, cr);
+
 	rw_exit(&zp->z_xattr_lock);
 	zfs_exit(zfsvfs, FTAG);
 
@@ -427,14 +471,14 @@ zpl_xattr_set_dir(struct vnode *ip, const char *name, zfs_uio_t *uio,
 	if (uio == NULL || zfs_uio_resid(uio) != 0)
 		lookup_flags |= CREATE_XATTR_DIR;
 
-	error = -zfs_lookup(ITOZ(ip), NULL, &dxzp, lookup_flags,
+	error = zfs_lookup(ITOZ(ip), NULL, &dxzp, lookup_flags,
 	    cr, NULL, NULL);
 	if (error)
 		goto out;
 
 	/* Lookup a specific xattr name in the directory */
-	error = -zfs_lookup(dxzp, (char *)name, &xzp, 0, cr, NULL, NULL);
-	if (error && (error != -ENOENT))
+	error = zfs_lookup(dxzp, (char *)name, &xzp, 0, cr, NULL, NULL);
+	if (error && (error != ENOENT))
 		goto out;
 
 	error = 0;
@@ -442,7 +486,7 @@ zpl_xattr_set_dir(struct vnode *ip, const char *name, zfs_uio_t *uio,
 	/* Remove a specific name xattr when value is set to NULL. */
 	if (uio == NULL || zfs_uio_resid(uio) == 0) {
 		if (xzp)
-			error = -zfs_remove(dxzp, (char *)name, cr, 0);
+			error = zfs_remove(dxzp, (char *)name, cr, 0);
 
 		goto out;
 	}
@@ -455,8 +499,7 @@ zpl_xattr_set_dir(struct vnode *ip, const char *name, zfs_uio_t *uio,
 		VATTR_SET(&vattr, va_mode, xattr_mode);
 		VATTR_SET(&vattr, va_uid, crgetfsuid(cr));
 		VATTR_SET(&vattr, va_gid, crgetfsgid(cr));
-
-		error = -zfs_create(dxzp, (char *)name, &vattr, 0, 0644, &xzp,
+		error = zfs_create(dxzp, (char *)name, &vattr, 0, 0644, &xzp,
 		    cr, 0, NULL);
 		if (error)
 			goto out;
@@ -464,11 +507,11 @@ zpl_xattr_set_dir(struct vnode *ip, const char *name, zfs_uio_t *uio,
 
 	ASSERT(xzp != NULL);
 
-	error = -zfs_freesp(xzp, 0, 0, xattr_mode, TRUE);
+	error = zfs_freesp(xzp, 0, 0, xattr_mode, TRUE);
 	if (error)
 		goto out;
 
-	error = -zfs_write(xzp, uio, 0, cr);
+	error = zfs_write(xzp, uio, 0, cr);
 
 out:
 	if (error == 0) {
@@ -484,10 +527,8 @@ out:
 	if (dxzp)
 		zrele(dxzp);
 
-	if (error == -ENOENT)
-		error = -ENOATTR;
-
-	ASSERT3S(error, <=, 0);
+	if (error == ENOENT)
+		error = ENOATTR;
 
 	return (error);
 }
@@ -500,10 +541,12 @@ zpl_xattr_set_sa(struct vnode *ip, const char *name, zfs_uio_t *uio,
 	nvlist_t *nvl;
 	size_t sa_size;
 	int error = 0;
+	void *buf;
+	int len;
 
 	mutex_enter(&zp->z_lock);
 	if (zp->z_xattr_cached == NULL)
-		error = -zfs_sa_get_xattr(zp);
+		error = zfs_sa_get_xattr(zp);
 	mutex_exit(&zp->z_lock);
 
 	if (error)
@@ -513,25 +556,25 @@ zpl_xattr_set_sa(struct vnode *ip, const char *name, zfs_uio_t *uio,
 	nvl = zp->z_xattr_cached;
 
 	if (uio == NULL || zfs_uio_resid(uio) == 0) {
-		error = -nvlist_remove(nvl, name, DATA_TYPE_BYTE_ARRAY);
-		if (error == -ENOENT)
+		error = nvlist_remove(nvl, name, DATA_TYPE_BYTE_ARRAY);
+		if (error == ENOENT)
 			error = zpl_xattr_set_dir(ip, name, NULL, flags, cr);
 	} else {
 		/* Limited to 32k to keep nvpair memory allocations small */
 		if (zfs_uio_resid(uio) > DXATTR_MAX_ENTRY_SIZE)
-			return (-EFBIG);
+			return (EFBIG);
 
 		/* Prevent the DXATTR SA from consuming the entire SA region */
-		error = -nvlist_size(nvl, &sa_size, NV_ENCODE_XDR);
+		error = nvlist_size(nvl, &sa_size, NV_ENCODE_XDR);
 		if (error)
 			return (error);
 
 		if (sa_size > DXATTR_MAX_SA_SIZE)
-			return (-EFBIG);
+			return (EFBIG);
 
 		/* This only supports "one iovec" for the data */
-		void *buf = zfs_uio_iovbase(uio, 0);
-		int len = zfs_uio_iovlen(uio, 0);
+		buf = zfs_uio_iovbase(uio, 0);
+		len = zfs_uio_iovlen(uio, 0);
 
 		/*
 		 * Allocate memory to copyin, which is a shame as nvlist
@@ -545,7 +588,7 @@ zpl_xattr_set_sa(struct vnode *ip, const char *name, zfs_uio_t *uio,
 			zfs_uiomove(buf, len, UIO_WRITE, uio);
 		}
 
-		error = -nvlist_add_byte_array(nvl, name,
+		error = nvlist_add_byte_array(nvl, name,
 		    (uchar_t *)buf, len);
 
 		if (zfs_uio_segflg(uio) != UIO_SYSSPACE)
@@ -559,8 +602,8 @@ zpl_xattr_set_sa(struct vnode *ip, const char *name, zfs_uio_t *uio,
 	 * will be reconstructed from the ARC when next accessed.
 	 */
 	if (error == 0) {
-		void *buf = NULL;
-		int len = 0;
+		buf = NULL;
+		len = 0;
 		if (uio != NULL) {
 			buf = zfs_uio_iovbase(uio, 0);
 			len = zfs_uio_iovlen(uio, 0);
@@ -573,13 +616,11 @@ zpl_xattr_set_sa(struct vnode *ip, const char *name, zfs_uio_t *uio,
 		zp->z_xattr_cached = NULL;
 	}
 
-	ASSERT3S(error, <=, 0);
-
 	return (error);
 }
 
-int
-zpl_xattr_set(struct vnode *ip, const char *name, zfs_uio_t *uio, int flags,
+static int
+_zpl_xattr_set(struct vnode *ip, const char *name, zfs_uio_t *uio, int flags,
     cred_t *cr)
 {
 	znode_t *zp = ITOZ(ip);
@@ -588,7 +629,7 @@ zpl_xattr_set(struct vnode *ip, const char *name, zfs_uio_t *uio, int flags,
 	int error;
 
 	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
-		return (error);
+		goto out1;
 	rw_enter(&zp->z_xattr_lock, RW_WRITER);
 
 	/*
@@ -601,19 +642,18 @@ zpl_xattr_set(struct vnode *ip, const char *name, zfs_uio_t *uio, int flags,
 	 * We also want to know if it resides in sa or dir, so we can make
 	 * sure we don't end up with duplicate in both places.
 	 */
+
 	error = __zpl_xattr_where(ip, name, &where, cr);
-	if (error < 0) {
-		if (error != -ENOATTR)
+	if (error != 0) {
+		if (error != ENOATTR)
 			goto out;
 		if (flags & XATTR_REPLACE)
 			goto out;
 
 		/* The xattr to be removed already doesn't exist */
 		error = 0;
-		if (uio == NULL || zfs_uio_resid(uio) == 0)
-			goto out;
 	} else {
-		error = -EEXIST;
+		error = EEXIST;
 		if (flags & XATTR_CREATE)
 			goto out;
 	}
@@ -622,7 +662,9 @@ zpl_xattr_set(struct vnode *ip, const char *name, zfs_uio_t *uio, int flags,
 	if (zfsvfs->z_use_sa && zp->z_is_sa &&
 	    (zfsvfs->z_xattr_sa ||
 	    (uio != NULL && zfs_uio_resid(uio) == 0 && where & XATTR_IN_SA))) {
+
 		error = zpl_xattr_set_sa(ip, name, uio, flags, cr);
+
 		if (error == 0) {
 			/*
 			 * Successfully put into SA, we need to clear the one
@@ -635,6 +677,7 @@ zpl_xattr_set(struct vnode *ip, const char *name, zfs_uio_t *uio, int flags,
 	}
 
 	error = zpl_xattr_set_dir(ip, name, uio, flags, cr);
+
 	/*
 	 * Successfully put into dir, we need to clear the one in SA.
 	 */
@@ -643,8 +686,64 @@ zpl_xattr_set(struct vnode *ip, const char *name, zfs_uio_t *uio, int flags,
 out:
 	rw_exit(&zp->z_xattr_lock);
 	zfs_exit(zfsvfs, FTAG);
-
-	ASSERT3S(error, <=, 0);
-
+out1:
 	return (error);
 }
+
+int
+zpl_xattr_set(struct vnode *ip, const char *name, zfs_uio_t *uio, int flags,
+    cred_t *cr)
+{
+	int error;
+
+	/*
+	 * Remove alternate compat version of the xattr so we only set the
+	 * version specified by the zfs_xattr_compat tunable.
+	 *
+	 * The following flags must be handled correctly:
+	 *
+	 *   XATTR_CREATE: fail if xattr already exists
+	 *   XATTR_REPLACE: fail if xattr does not exist
+	 */
+
+	char *prefixed_name = kmem_asprintf("%s%s", XATTR_USER_PREFIX, name);
+	const char *clear_name, *set_name;
+	if (zfs_xattr_compat) {
+		clear_name = prefixed_name;
+		set_name = name;
+	} else {
+		clear_name = name;
+		set_name = prefixed_name;
+	}
+
+	/*
+	 * Clear the old value with the alternative name format, if it exists.
+	 */
+	error = _zpl_xattr_set(ip, clear_name, NULL, flags, cr);
+	/*
+	 * XATTR_CREATE was specified and we failed to clear the xattr
+	 * because it already exists.  Stop here.
+	 */
+	if (error == EEXIST)
+		goto out;
+
+	/*
+	 * If XATTR_REPLACE was specified and we succeeded to clear
+	 * an xattr, we don't need to replace anything when setting
+	 * the new value.  If we failed with -ENODATA that's fine,
+	 * there was nothing to be cleared and we can ignore the error.
+	 */
+	if (error == 0)
+		flags &= ~XATTR_REPLACE;
+	/*
+	 * Set the new value with the configured name format.
+	 */
+	error = _zpl_xattr_set(ip, set_name, uio, flags, cr);
+out:
+	kmem_strfree(prefixed_name);
+	return (error);
+}
+
+
+ZFS_MODULE_PARAM(zfs, zfs_, xattr_compat, UINT, ZMOD_RW,
+	"Use legacy ZFS xattr naming for writing new user namespace xattrs");

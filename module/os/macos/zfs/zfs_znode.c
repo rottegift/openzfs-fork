@@ -89,7 +89,7 @@ zfs_release_sa_handle(sa_handle_t *hdl, dmu_buf_t *db, void *tag);
  * This is used by the test suite so that it can delay znodes from being
  * freed in order to inspect the unlinked set.
  */
-int zfs_unlink_suspend_progress = 0;
+static int zfs_unlink_suspend_progress = 0;
 
 /*
  * This callback is invoked when acquiring a RL_WRITER or RL_APPEND lock on
@@ -2349,3 +2349,6 @@ zfs_znode_update_vfs(znode_t *zp)
 {
 	ubc_setsize(ZTOV(zp), zp->z_size);
 }
+
+ZFS_MODULE_PARAM(zfs, zfs_, unlink_suspend_progress, UINT, ZMOD_RW,
+	    "Set to prevent async unlinks ");

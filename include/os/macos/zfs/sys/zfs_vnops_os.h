@@ -240,9 +240,10 @@ extern struct vnodeopv_desc zfs_ctldir_opv_desc;
 extern int (**zfs_ctldirops)(void *);
 
 
-extern ssize_t zpl_xattr_list(struct vnode *dvp, zfs_uio_t *uio, cred_t *cr);
+extern int zpl_xattr_list(struct vnode *dvp, zfs_uio_t *uio,
+    ssize_t *, cred_t *cr);
 extern int zpl_xattr_get(struct vnode *ip, const char *name,
-    zfs_uio_t *uio, cred_t *cr);
+    zfs_uio_t *uio, ssize_t *, cred_t *cr);
 extern int zpl_xattr_set(struct vnode *ip, const char *name,
     zfs_uio_t *uio, int flags, cred_t *cr);
 

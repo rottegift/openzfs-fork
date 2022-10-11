@@ -42,8 +42,16 @@
 
 static taskq_t *vdev_file_taskq;
 
-unsigned long vdev_file_logical_ashift = SPA_MINBLOCKSHIFT;
-unsigned long vdev_file_physical_ashift = SPA_MINBLOCKSHIFT;
+/*
+ * By default, the logical/physical ashift for file vdevs is set to
+ * SPA_MINBLOCKSHIFT (9). This allows all file vdevs to use 512B (1 << 9)
+ * blocksizes. Users may opt to change one or both of these for testing
+ * or performance reasons. Care should be taken as these values will
+ * impact the vdev_ashift setting which can only be set at vdev creation
+ * time.
+ */
+static unsigned long vdev_file_logical_ashift = SPA_MINBLOCKSHIFT;
+static unsigned long vdev_file_physical_ashift = SPA_MINBLOCKSHIFT;
 
 static void
 vdev_file_hold(vdev_t *vd)
@@ -342,3 +350,8 @@ vdev_ops_t vdev_disk_ops = {
 };
 
 #endif
+
+ZFS_MODULE_PARAM(zfs_vdev_file, vdev_file_, logical_ashift, ULONG, ZMOD_RW,
+	"Logical ashift for file-based devices");
+ZFS_MODULE_PARAM(zfs_vdev_file, vdev_file_, physical_ashift, ULONG, ZMOD_RW,
+	"Physical ashift for file-based devices");
