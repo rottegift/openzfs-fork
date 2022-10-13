@@ -146,7 +146,6 @@ ${WORKDIR}/${bindir}/zinject
 ${WORKDIR}/${bindir}/zpool
 ${WORKDIR}/${bindir}/zstream
 ${WORKDIR}/${bindir}/ztest
-${WORKDIR}/${bindir}/raidz_test
 ${WORKDIR}/${bindir}/zfs_ids_to_path
 ${WORKDIR}/${bindir}/InvariantDisks
 ${WORKDIR}/${bindir}/zfs_util
@@ -257,7 +256,7 @@ function delete_and_keep
 function do_prune
 {
 
-    delete_and_keep "${WORKDIR}/${bindir}/" "(zfs|zpool|zdb|zed|zhack|zinject|zstream|zstreamdump|ztest|InvariantDisks|zfs_util|zconfigd|arc_summary|arcstat|dbufstat|fsck.zfs|raidz_test|zfs_ids_to_path|zpool_influxdb|zsysctl|mount_zfs)"
+    delete_and_keep "${WORKDIR}/${bindir}/" "(zfs|zpool|zdb|zed|zhack|zinject|zstream|zstreamdump|ztest|InvariantDisks|zfs_util|zconfigd|arc_summary|arcstat|dbufstat|fsck.zfs|zilstat|zfs_ids_to_path|zpool_influxdb|zsysctl|mount_zfs)"
 
     pushd "${WORKDIR}" || fail "Unable to cd to ${WORKDIR}"
 
@@ -409,7 +408,6 @@ productbuild --synthesize --package ./my_package.pkg distribution.xml
 sed < distribution.xml > distribution_new.xml -e \
 "s#</installer-gui-script># <title>Open ZFS on OsX ${version} - ${friendly}-${OS}</title>\\
  <background file=\"background.png\" scaling=\"proportional\" alignment=\"bottomleft\"/> \\
- <background-darkAqua file=\"background.png\" scaling=\"proportional\" alignment=\"bottomleft\"/> \\
  <volume-check>\\
   <allowed-os-versions>\\
    <os-version min=\"${OS}.0\"/>\\

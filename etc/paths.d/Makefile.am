@@ -1,5 +1,5 @@
 pathsddir = $(sysconfdir)/paths.d
-pathsd_DATA = zfs-path
+pathsd_DATA = %D%/zfs-path
 
 paths_ddir = $(sysconfdir)/paths.d/
 dist_paths_d_DATA = \
@@ -18,4 +18,3 @@ pathsd-data-hook: %D%/zfs-path.in
 		-e 's,@launchddaemondir\@,$(launchddaemondir),g' \
 		-e 's,@launchdscriptdir\@,$(launchdscriptdir),g' \
 		%D%/zfs-path.in > $(DESTDIR)/$(sysconfdir)/paths.d/zfs-path
-
