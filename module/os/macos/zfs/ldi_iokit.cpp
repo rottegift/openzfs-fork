@@ -1743,17 +1743,16 @@ handle_get_media_info_ext_iokit(struct ldi_handle *lhp,
 	OSObject *prop;
 	OSNumber *number;
 	uint32_t blksize, pblksize;
-	uint32_t prefblksize = 0;
 	uint64_t blkcount;
 
 	if (!lhp || !dkmext) {
-		printf("zfs: %s missing lhp or dkmext\n", __func__);
+		dprintf("%s missing lhp or dkmext\n", __func__);
 		return (EINVAL);
 	}
 
 	/* Validate IOMedia */
 	if (!OSDynamicCast(IOMedia, LH_MEDIA(lhp))) {
-		printf("zfs: %s invalid IOKit handle\n", __func__);
+		dprintf("%s invalid IOKit handle\n", __func__);
 		return (ENODEV);
 	}
 
@@ -1765,7 +1764,7 @@ handle_get_media_info_ext_iokit(struct ldi_handle *lhp,
 
 	number = OSDynamicCast(OSNumber, prop);
 	if (!prop || !number) {
-		printf("zfs: %s couldn't get physical blocksize\n", __func__);
+		dprintf("%s couldn't get physical blocksize\n", __func__);
 		LH_MEDIA(lhp)->release();
 		return (ENXIO);
 	}
@@ -1774,52 +1773,14 @@ handle_get_media_info_ext_iokit(struct ldi_handle *lhp,
 	number = 0;
 	prop = 0;
 
-	/*
-	 * Get the Preferred Block Size, which may be smaller
-	 * than the Physical Block Size, and which appears to
-	 * be what is bubbled up to diskutil info -plist
-	 * <key>DeviceBlockSize</key>.
-	 *
-	 * In theory, this should only limit the ashift when
-	 * adding a vdev or in the readonly ashift vdevprop
-	 * (e.g. zpool get ashift pool guid), however in practice
-	 * zpool status -vx can report mismatches, and there
-	 * can be vdev.bad_ashift errors that eject disks early
-	 * in a scrub (which should not happen).
-	 *
-	 * Therefore return the smaller of the kIOPreferredBlockSizeKey
-	 * and kIOPropertyPhysicalBlockSizeKey.
-	 */
-
-	prop = LH_MEDIA(lhp)->getProperty(kIOMediaPreferredBlockSizeKey,
-	    gIOServicePlane, kIORegistryIterateRecursively |
-	    kIORegistryIterateParents);
-
-	number = OSDynamicCast(OSNumber, prop);
-	if (!prop || !number) {
-		printf("zfs: %s couldn't get preferred blocksize\n", __func__);
-		LH_MEDIA(lhp)->release();
-	} else {
-		prefblksize = number->unsigned32BitValue();
-	}
-
-	if (prefblksize == 0) {
-		prefblksize = pblksize;
-		printf("zfs: %s set preferred block size to phys size %u\n",
-		    __func__, prefblksize);
-	}
-
-	number = 0;
-	prop = 0;
-
 	if ((blksize = LH_MEDIA(lhp)->getPreferredBlockSize()) == 0) {
-		printf("zfs: %s invalid blocksize\n", __func__);
+		dprintf("%s invalid blocksize\n", __func__);
 		LH_MEDIA(lhp)->release();
 		return (ENXIO);
 	}
 
 	if ((blkcount = LH_MEDIA(lhp)->getSize() / blksize) == 0) {
-		printf("%s invalid block count\n", __func__);
+		dprintf("%s invalid block count\n", __func__);
 		LH_MEDIA(lhp)->release();
 		return (ENXIO);
 	}
@@ -1827,15 +1788,15 @@ handle_get_media_info_ext_iokit(struct ldi_handle *lhp,
 	LH_MEDIA(lhp)->release();
 
 #ifdef DEBUG
-	printf("%s real phys blksize %u, preferred blksize %u, "
-	    "logical blksize %u, blockcount %llu\n",
-	    __func__, pblksize, prefblksize, blksize, blkcount);
+	dprintf("%s phys blksize %u, logical blksize %u, blockcount %llu\n",
+	    __func__, pblksize, blksize, blkcount);
 #endif
 
 	/* Set the return values */
 	dkmext->dki_capacity = blkcount;
 	dkmext->dki_lbsize = blksize;
-	dkmext->dki_pbsize = MIN(pblksize, prefblksize);
+	dkmext->dki_pbsize = pblksize;
+
 	return (0);
 }
 
