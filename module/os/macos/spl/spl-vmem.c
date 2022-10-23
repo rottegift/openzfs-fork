@@ -1321,7 +1321,8 @@ spl_vmem_xnu_useful_bytes_free(void)
 			return (PAGE_SIZE * MAX(spl_vm_pages_reclaimed, 1));
 		else
 			return (total_minus_reserve -
-			    (segkmem_total_mem_allocated + PAGE_SIZE * spl_vm_pages_reclaimed));
+			    (segkmem_total_mem_allocated +
+			    PAGE_SIZE * spl_vm_pages_reclaimed));
 	}
 
 	/*
@@ -2977,7 +2978,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 
 	if (p != NULL) {
 		/* grow fail_at periodically */
-		if(success_ct++ >= 128) {
+		if (success_ct++ >= 128) {
 			fail_at += size;
 			success_ct = 0;
 		}
@@ -3019,7 +3020,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		return (NULL);
 
 	for (uint64_t loop_for_mem = 1; ; loop_for_mem++) {
-		//ASSERT3U((loop_for_mem % 10), ==, 0); // 1 second bleat beat
+		// ASSERT3U((loop_for_mem % 10), ==, 0); // 1 second bleat beat
 		IOSleep(100); /* sleep 100 milliseconds, hope to free memory */
 		/* only try to allocate if there is memory */
 		if (fail_at > segkmem_total_mem_allocated) {
@@ -3803,7 +3804,7 @@ vmem_init(const char *heap_name,
 		 * bucket_heap arena.
 		 */
 		vmem_t *b = vmem_create(buf, NULL, 0,
-		    heap_quantum,            /* minimum export */
+		    heap_quantum, /* minimum export */
 		    xnu_alloc_throttled, xnu_free_throttled,
 		    spl_default_arena_parent,
 		    32, /* minimum import */
