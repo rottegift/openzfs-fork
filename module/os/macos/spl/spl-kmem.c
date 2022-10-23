@@ -4301,7 +4301,7 @@ kmem_cache_fini()
 int64_t
 spl_reduce_dynamic_cap(void)
 {
-	const uint64_t in = spl_dynamic_memory_cap;
+	const uint64_t cap_in = spl_dynamic_memory_cap;
 	spl_dynamic_memory_cap -=
 	    (spl_dynamic_memory_cap >> 5);
 	const uint64_t thresh = physmem >> 3;
@@ -4311,13 +4311,16 @@ spl_reduce_dynamic_cap(void)
 	} else {
 		atomic_inc_64(&spl_dynamic_memory_cap_reductions);
 	}
-	const uint_t out = spl_dynamic_memory_cap;
-	if (in > out) {
-		spl_free = out - in;
-		return (out - in);
+	const uint64_t cap_out = spl_dynamic_memory_cap;
+	const int64_t cap_diff = cap_out - cap_in;
+	const int64_t minusthresh = -(int64_t)thresh;
+
+	if (cap_diff > minusthresh) {
+		spl_free = minusthresh;
+		return (minusthresh);
 	} else {
-		spl_free = 0;
-		return (0);
+		spl_free = cap_diff;
+		return (cap_diff);
 	}
 }
 
@@ -4341,9 +4344,10 @@ spl_free_wrapper(void)
 			atomic_inc_64(&spl_memory_cap_enforcements);
 			const int64_t dec = spl_manual_memory_cap -
 			    segkmem_total_mem_allocated;
-			if (dec > 0) {
-				spl_free = 0;
-				return (0);
+			const int64_t giveback = -16LL*1024LL*1024LL;
+			if (dec > giveback) {
+				spl_free = giveback;
+				return (giveback);
 			} else {
 				spl_free = dec;
 				return (dec);
