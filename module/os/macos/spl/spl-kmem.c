@@ -4331,12 +4331,11 @@ spl_reduce_dynamic_cap(void)
 int64_t
 spl_free_wrapper(void)
 {
-	if (spl_free >= 0
-	    && spl_enforce_memory_caps != 0) {
+	if (spl_free >= 0 && spl_enforce_memory_caps != 0) {
 		if (segkmem_total_mem_allocated >=
 		    spl_dynamic_memory_cap) {
 			atomic_inc_64(&spl_memory_cap_enforcements);
-			return(spl_reduce_dynamic_cap());
+			return (spl_reduce_dynamic_cap());
 		} else if (spl_manual_memory_cap > 0 &&
 		    segkmem_total_mem_allocated >= spl_manual_memory_cap) {
 			atomic_inc_64(&spl_memory_cap_enforcements);
