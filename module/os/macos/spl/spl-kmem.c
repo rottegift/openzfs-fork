@@ -73,6 +73,7 @@ static _Atomic uint64_t spl_free_last_pressure = 0;
 static uint64_t spl_enforce_memory_caps = 1;
 _Atomic uint64_t spl_dynamic_memory_cap = 0;
 uint64_t spl_dynamic_memory_cap_reductions = 0;
+uint64_t spl_dynamic_memory_cap_hit_floor = 0;
 static uint64_t spl_manual_memory_cap = 0;
 static uint64_t spl_memory_cap_enforcements = 0;
 
@@ -551,6 +552,7 @@ typedef struct spl_stats {
 	kstat_named_t spl_enforce_memory_caps;
 	kstat_named_t spl_dynamic_memory_cap;
 	kstat_named_t spl_dynamic_memory_cap_reductions;
+	kstat_named_t spl_dynamic_memory_cap_hit_floor;
 	kstat_named_t spl_manual_memory_cap;
 	kstat_named_t spl_memory_cap_enforcements;
 
@@ -638,6 +640,7 @@ static spl_stats_t spl_stats = {
 	{"spl_osif_enforce_memory_caps", KSTAT_DATA_UINT64},
 	{"spl_osif_dynamic_memory_cap", KSTAT_DATA_UINT64},
 	{"spl_osif_dynamic_memory_cap_reductions", KSTAT_DATA_UINT64},
+	{"spl_osif_dynamic_memory_cap_hit_floor", KSTAT_DATA_UINT64},
 	{"spl_osif_manual_memory_cap", KSTAT_DATA_UINT64},
 	{"spl_osif_memory_cap_enforcements", KSTAT_DATA_UINT64},
 
@@ -5100,6 +5103,8 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		    spl_dynamic_memory_cap;
 		ks->spl_dynamic_memory_cap_reductions.value.ui64 =
 		    spl_dynamic_memory_cap_reductions;
+		ks->spl_dynamic_memory_cap_hit_floor.value.ui64 =
+		    spl_dynamic_memory_cap_hit_floor;
 		ks->spl_manual_memory_cap.value.ui64 =
 		    spl_manual_memory_cap;
 		ks->spl_memory_cap_enforcements.value.ui64 =
