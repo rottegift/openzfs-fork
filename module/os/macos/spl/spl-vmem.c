@@ -456,6 +456,7 @@ extern uint64_t total_memory;
 
 extern _Atomic uint64_t spl_dynamic_memory_cap;
 extern uint64_t spl_dynamic_memory_cap_reductions;
+extern uint64_t spl_dynamic_memory_cap_hit_floor;
 
 extern void IOSleep(unsigned milliseconds);
 
@@ -2988,9 +2989,21 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	success_ct = 0;
 	fail_at = segkmem_total_mem_allocated - size;
 
+	/*
+	 * adjust dynamic memory cap downwards by 1/32 (~ 3%) of the current
+	 * memory cap, but do not drop below 1/8 of physmem.
+	 */
 	if (fail_at < spl_dynamic_memory_cap) {
 		spl_dynamic_memory_cap = fail_at;
-		atomic_inc_64(&spl_dynamic_memory_cap_reductions);
+		spl_dynamic_memory_cap -=
+		    (spl_dynamic_memory_cap >> 4);
+		const uint64_t thresh = physmem >> 3;
+		if (thresh > spl_dynamic_memory_cap) {
+			spl_dynamic_memory_cap = thresh;
+			atomic_inc_64(&spl_dynamic_memory_cap_hit_floor);
+		} else {
+			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
+		}
 	}
 
 	/* wait until used memory falls below failure_at */
