@@ -4288,7 +4288,46 @@ kmem_cache_fini()
 	list_destroy(&freelist);
 }
 
-// this is intended to substitute for kmem_avail() in arc_os.c
+/*
+ * Reduce dynamic memory cap by 1/32 (~3%) of physmem, unless it is already
+ * 1/8 of physmem or lower.  unlike the logic in
+ * spl-vmem.c:xnu_alloc_throttled(), we likely have not observed xnu being
+ * ready to deny us memory, so we drop half the cap half as much.
+ *
+ * Inter-thread synchronization of spl_dynamic_memory_cap and spl_free here in
+ * the next two functions is important as there _will_ be multi-core bursts
+ * of spl_free_wrapper() calls.
+ */
+int64_t
+spl_reduce_dynamic_cap(void)
+{
+	const uint64_t in = spl_dynamic_memory_cap;
+	spl_dynamic_memory_cap -=
+	    (spl_dynamic_memory_cap >> 5);
+	const uint64_t thresh = physmem >> 3;
+	if (thresh > spl_dynamic_memory_cap) {
+		spl_dynamic_memory_cap = thresh;
+		atomic_inc_64(&spl_dynamic_memory_cap_hit_floor);
+	} else {
+		atomic_inc_64(&spl_dynamic_memory_cap_reductions);
+	}
+	const uint_t out = spl_dynamic_memory_cap;
+	if (in > out) {
+		spl_free = out - in;
+		return (out - in);
+	} else {
+		spl_free = 0;
+		return (0);
+	}
+}
+
+/*
+ * This substitutes for kmem_avail() in arc_os.c
+ *
+ * If we believe there is free memory but memory caps are active, enforce on
+ * them, decrementing the dynamic cap if necessary, returning a non-positive
+ * free memory to ARC if we have reached either enforced cap.
+ */
 int64_t
 spl_free_wrapper(void)
 {
@@ -4296,14 +4335,20 @@ spl_free_wrapper(void)
 	    && spl_enforce_memory_caps != 0) {
 		if (segkmem_total_mem_allocated >=
 		    spl_dynamic_memory_cap) {
-			spl_free = spl_dynamic_memory_cap -
-			    segkmem_total_mem_allocated;
 			atomic_inc_64(&spl_memory_cap_enforcements);
+			return(spl_reduce_dynamic_cap());
 		} else if (spl_manual_memory_cap > 0 &&
 		    segkmem_total_mem_allocated >= spl_manual_memory_cap) {
-			spl_free = spl_manual_memory_cap -
-			    segkmem_total_mem_allocated;
 			atomic_inc_64(&spl_memory_cap_enforcements);
+			const int64_t dec = spl_manual_memory_cap -
+			    segkmem_total_mem_allocated;
+			if (dec > 0) {
+				spl_free = 0;
+				return (0);
+			} else {
+				spl_free = dec;
+				return (dec);
+			}
 		}
 	}
 
