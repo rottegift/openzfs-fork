@@ -72,10 +72,12 @@ static _Atomic uint64_t spl_free_last_pressure = 0;
 
 static uint64_t spl_enforce_memory_caps = 1;
 _Atomic uint64_t spl_dynamic_memory_cap = 0;
+kmutex_t spl_dynamic_memory_cap_lock;
 uint64_t spl_dynamic_memory_cap_reductions = 0;
 uint64_t spl_dynamic_memory_cap_hit_floor = 0;
 static uint64_t spl_manual_memory_cap = 0;
 static uint64_t spl_memory_cap_enforcements = 0;
+
 
 /*
  * variables informed by "pure"  mach_vm_pressure interface
@@ -4309,16 +4311,21 @@ spl_reduce_dynamic_cap(void)
 
 	const uint64_t reduction = 16LL*1024LL*1024LL;
 
-	spl_dynamic_memory_cap -= reduction;
-
 	const uint64_t thresh = physmem >> 3;
+
+	mutex_enter(&spl_dynamic_memory_cap_lock);
+
+	if (spl_dynamic_memory_cap > thresh) {
+		spl_dynamic_memory_cap -= reduction;
+		atomic_inc_64(&spl_dynamic_memory_cap_reductions);
+	}
 
 	if (thresh > spl_dynamic_memory_cap) {
 		spl_dynamic_memory_cap = thresh;
 		atomic_inc_64(&spl_dynamic_memory_cap_hit_floor);
-	} else {
-		atomic_inc_64(&spl_dynamic_memory_cap_reductions);
 	}
+
+	mutex_exit(&spl_dynamic_memory_cap_lock);
 
 	const uint64_t cap_out = spl_dynamic_memory_cap;
 	const int64_t cap_diff = cap_out - cap_in;
@@ -5547,6 +5554,8 @@ spl_kmem_thread_init(void)
 	// Initialize the spl_free locks
 	mutex_init(&spl_free_thread_lock, "spl_free_thead_lock", MUTEX_DEFAULT,
 	    NULL);
+	mutex_init(&spl_dynamic_memory_cap_lock, "spl_dynamic_memory_cap_lock",
+	    MUTEX_DEFAULT, NULL);
 
 	kmem_taskq = taskq_create("kmem_taskq", 1, minclsyspri,
 	    600, INT_MAX, TASKQ_PREPOPULATE);
@@ -5570,6 +5579,8 @@ spl_kmem_thread_fini(void)
 	mutex_exit(&spl_free_thread_lock);
 	cv_destroy(&spl_free_thread_cv);
 	mutex_destroy(&spl_free_thread_lock);
+
+	mutex_destroy(&spl_dynamic_memory_cap_lock);
 
 	bsd_untimeout(kmem_update,  0);
 	bsd_untimeout(kmem_reap_timeout, &kmem_reaping);
