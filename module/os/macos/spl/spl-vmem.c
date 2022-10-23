@@ -455,6 +455,7 @@ extern uint64_t segkmem_total_mem_allocated;
 extern uint64_t total_memory;
 
 extern _Atomic uint64_t spl_dynamic_memory_cap;
+extern kmutex_t spl_dynamic_memory_cap_lock;
 extern uint64_t spl_dynamic_memory_cap_reductions;
 extern uint64_t spl_dynamic_memory_cap_hit_floor;
 
@@ -2998,6 +2999,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	 * triggered by ARC or other clients inquiring about spl_free()
 	 */
 	if (fail_at < spl_dynamic_memory_cap) {
+		mutex_enter(&spl_dynamic_memory_cap_lock);
 		spl_dynamic_memory_cap = fail_at;
 		spl_dynamic_memory_cap -=
 		    (spl_dynamic_memory_cap >> 4);
@@ -3008,6 +3010,7 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		} else {
 			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
 		}
+		mutex_exit(&spl_dynamic_memory_cap_lock);
 	}
 
 	/* wait until used memory falls below failure_at */
