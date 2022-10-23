@@ -2990,8 +2990,11 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	fail_at = segkmem_total_mem_allocated - size;
 
 	/*
-	 * adjust dynamic memory cap downwards by 1/32 (~ 3%) of the current
+	 * adjust dynamic memory cap downwards by 1/16 (~ 6%) of the current
 	 * memory cap, but do not drop below 1/8 of physmem.
+	 *
+	 * see also spl-kmem.c:spl_reduce_dynamic_cap(), which is
+	 * triggered by ARC or other clients inquiring about spl_free()
 	 */
 	if (fail_at < spl_dynamic_memory_cap) {
 		spl_dynamic_memory_cap = fail_at;
