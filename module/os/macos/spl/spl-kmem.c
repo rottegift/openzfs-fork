@@ -4301,16 +4301,25 @@ kmem_cache_fini()
 int64_t
 spl_reduce_dynamic_cap(void)
 {
+	/*
+	 * take a snapshot of spl_dynamic_memory_cap, which
+	 * may drop while we are in this function
+	 */
 	const uint64_t cap_in = spl_dynamic_memory_cap;
-	spl_dynamic_memory_cap -=
-	    (spl_dynamic_memory_cap >> 5);
+
+	const uint64_t reduction = 16LL*1024LL*1024LL;
+
+	spl_dynamic_memory_cap -= reduction;
+
 	const uint64_t thresh = physmem >> 3;
+
 	if (thresh > spl_dynamic_memory_cap) {
 		spl_dynamic_memory_cap = thresh;
 		atomic_inc_64(&spl_dynamic_memory_cap_hit_floor);
 	} else {
 		atomic_inc_64(&spl_dynamic_memory_cap_reductions);
 	}
+
 	const uint64_t cap_out = spl_dynamic_memory_cap;
 	const int64_t cap_diff = cap_out - cap_in;
 	const int64_t minusthresh = -(int64_t)thresh;
