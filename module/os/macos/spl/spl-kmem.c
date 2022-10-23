@@ -4291,8 +4291,8 @@ kmem_cache_fini()
 }
 
 /*
- * Reduce dynamic memory cap by 1/32 (~3%) of physmem, unless it is already
- * 1/8 of physmem or lower.  unlike the logic in
+ * Reduce dynamic memory cap by a set amount ("reduction"), unless the cap is
+ * already 1/8 of physmem or lower.  unlike the logic in
  * spl-vmem.c:xnu_alloc_throttled(), we likely have not observed xnu being
  * ready to deny us memory, so we drop half the cap half as much.
  *
@@ -4309,7 +4309,7 @@ spl_reduce_dynamic_cap(void)
 	 */
 	const uint64_t cap_in = spl_dynamic_memory_cap;
 
-	const uint64_t reduction = 16LL*1024LL*1024LL;
+	const uint64_t reduction = 32LL*1024LL*1024LL;
 
 	const uint64_t thresh = physmem >> 3;
 
