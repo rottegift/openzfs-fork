@@ -4316,9 +4316,9 @@ spl_reduce_dynamic_cap(void)
 
 	const uint64_t reduction = physmem >> 10;
 
-	const uint64_t thresh = physmem >> 3;
+	const int64_t thresh = physmem >> 3;
 
-	const uint64_t reduced = MAX(cap_in - reduction, thresh);
+	const int64_t reduced = MAX((int64_t)(cap_in - reduction), thresh);
 
 	/*
 	 * Adjust cap downwards if enough time has elapsed
@@ -4332,7 +4332,8 @@ spl_reduce_dynamic_cap(void)
 	if (now > spl_dynamic_memory_cap_last_downward_adjust +
 	    SEC2NSEC(60)) {
 
-		if (spl_dynamic_memory_cap > reduced) {
+		if (spl_dynamic_memory_cap > reduced ||
+		    spl_dynamic_memory_cap == 0) {
 			spl_dynamic_memory_cap_last_downward_adjust = now;
 			spl_dynamic_memory_cap = reduced;
 			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
