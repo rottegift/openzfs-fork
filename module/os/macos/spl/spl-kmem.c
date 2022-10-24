@@ -70,7 +70,7 @@ static volatile _Atomic boolean_t spl_free_fast_pressure = FALSE;
 static _Atomic bool spl_free_maybe_reap_flag = false;
 static _Atomic uint64_t spl_free_last_pressure = 0;
 
-static uint64_t spl_enforce_memory_caps = 1;
+uint64_t spl_enforce_memory_caps = 1;
 _Atomic uint64_t spl_dynamic_memory_cap = 0;
 hrtime_t spl_dynamic_memory_cap_last_downward_adjust = 0;
 uint64_t spl_dynamic_memory_cap_skipped = 0;
@@ -4314,11 +4314,13 @@ spl_reduce_dynamic_cap(void)
 	 */
 	const uint64_t cap_in = spl_dynamic_memory_cap;
 
-	const uint64_t reduction = physmem >> 10;
+	const uint64_t reduce_amount = physmem >> 10;
 
 	const int64_t thresh = physmem >> 3;
 
-	const int64_t reduced = MAX((int64_t)(cap_in - reduction), thresh);
+	const int64_t reduction = (int64_t)(cap_in - reduce_amount);
+
+	const int64_t reduced = MAX(reduction, thresh);
 
 	/*
 	 * Adjust cap downwards if enough time has elapsed
@@ -4333,11 +4335,12 @@ spl_reduce_dynamic_cap(void)
 	    SEC2NSEC(60)) {
 
 		if (spl_dynamic_memory_cap > reduced ||
-		    spl_dynamic_memory_cap == 0) {
+		    spl_dynamic_memory_cap == 0 ||
+		    spl_dynamic_memory_cap > physmem) {
 			spl_dynamic_memory_cap_last_downward_adjust = now;
 			spl_dynamic_memory_cap = reduced;
 			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
-		} else if ((int64_t)spl_dynamic_memory_cap <= thresh) {
+		} else if (spl_dynamic_memory_cap <= thresh) {
 			spl_dynamic_memory_cap_last_downward_adjust = now;
 			spl_dynamic_memory_cap = thresh;
 			atomic_inc_64(&spl_dynamic_memory_cap_hit_floor);
@@ -4373,7 +4376,7 @@ spl_reduce_dynamic_cap(void)
 int64_t
 spl_free_wrapper(void)
 {
-	if (spl_free >= 0 && spl_enforce_memory_caps != 0) {
+	if (spl_enforce_memory_caps != 0 && spl_free > 0) {
 		if (segkmem_total_mem_allocated >=
 		    spl_dynamic_memory_cap) {
 			atomic_inc_64(&spl_memory_cap_enforcements);
