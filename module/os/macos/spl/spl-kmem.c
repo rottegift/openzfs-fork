@@ -138,7 +138,7 @@ void read_random(void *buffer, uint_t numbytes);
 // the kmem module is preparing to unload.
 static int			shutting_down = 0;
 
-// Amount of RAM in machine
+// Amount of RAM PAGES in machine
 uint64_t			physmem = 0;
 
 // Size in bytes of the memory allocated in seg_kmem
@@ -149,6 +149,7 @@ extern uint64_t		zfs_threads;
 extern uint64_t		zfs_active_mutex;
 extern uint64_t		zfs_active_rwlock;
 
+// Half and full amount of RAM bytes in machine
 extern uint64_t		total_memory;
 extern uint64_t		real_total_memory;
 
@@ -3379,13 +3380,7 @@ spl_minimal_physmem_p(void)
 size_t
 kmem_maxavail(void)
 {
-#ifndef APPLE
-	//    spgcnt_t pmem = availrmem - tune.t_minarmem;
-	//    spgcnt_t vmem = btop(vmem_size(heap_arena, VMEM_FREE));
-	//
-	//    return ((size_t)ptob(MAX(MIN(pmem, vmem), 0)));
-#endif
-	return (physmem * PAGE_SIZE);
+	return (total_memory);
 }
 
 /*
@@ -4297,7 +4292,7 @@ kmem_cache_fini()
 
 /*
  * Reduce dynamic memory cap by a set amount ("reduction"), unless the cap is
- * already 1/8 of physmem or lower.  unlike the logic in
+ * already 1/8 of total_memory or lower.  unlike the logic in
  * spl-vmem.c:xnu_alloc_throttled(), we likely have not observed xnu being
  * ready to deny us memory, so we drop half the cap half as much.
  *
@@ -4314,9 +4309,9 @@ spl_reduce_dynamic_cap(void)
 	 */
 	const uint64_t cap_in = spl_dynamic_memory_cap;
 
-	const uint64_t reduce_amount = physmem >> 8;
+	const uint64_t reduce_amount = total_memory >> 8;
 
-	const int64_t thresh = physmem >> 3;
+	const int64_t thresh = total_memory >> 3;
 
 	const int64_t reduction = (int64_t)(cap_in - reduce_amount);
 
@@ -4335,9 +4330,9 @@ spl_reduce_dynamic_cap(void)
 	    SEC2NSEC(60)) {
 
 		if (spl_dynamic_memory_cap == 0 ||
-		    spl_dynamic_memory_cap > physmem) {
+		    spl_dynamic_memory_cap > total_memory) {
 			spl_dynamic_memory_cap_last_downward_adjust = now;
-			spl_dynamic_memory_cap = physmem - reduce_amount;
+			spl_dynamic_memory_cap = total_memory - reduce_amount;
 			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
 		} else if (spl_dynamic_memory_cap > reduced) {
 			spl_dynamic_memory_cap_last_downward_adjust = now;
@@ -4391,7 +4386,7 @@ spl_free_wrapper(void)
 			atomic_inc_64(&spl_memory_cap_enforcements);
 			const int64_t dec = spl_manual_memory_cap -
 			    segkmem_total_mem_allocated;
-			const int64_t giveback = -(physmem >> 10);
+			const int64_t giveback = -(total_memory >> 10);
 			if (dec > giveback) {
 				spl_free = giveback;
 				return (giveback);
@@ -4574,12 +4569,14 @@ spl_maybe_send_large_pressure(uint64_t now, uint64_t minutes, boolean_t full)
 
 	spl_last_large_pressure = now;
 
-	const int64_t sixteenth_physmem = (int64_t)real_total_memory / 16LL;
-	const int64_t sixtyfourth_physmem = sixteenth_physmem / 4LL;
-	int64_t howmuch = sixteenth_physmem;
+	const int64_t sixteenth_total_memory =
+	    (int64_t)real_total_memory / 16LL;
+	const int64_t sixtyfourth_total_memory =
+	    sixteenth_total_memory / 4LL;
+	int64_t howmuch = sixteenth_total_memory;
 
 	if (full == false)
-		howmuch = sixtyfourth_physmem;
+		howmuch = sixtyfourth_total_memory;
 
 
 	dprintf("SPL: %s: %lld bytes at time %llu\n",
@@ -5033,6 +5030,15 @@ spl_free_thread()
 		    (total_memory - segkmem_total_mem_allocated)) {
 			if (new_spl_free > 2LL * spamaxblksz)
 				new_spl_free = 2LL * spamaxblksz;
+		}
+
+		if (spl_enforce_memory_caps != 0) {
+			if (spl_dynamic_memory_cap != 0 &&
+			    spl_dynamic_memory_cap < new_spl_free) {
+				new_spl_free = spl_dynamic_memory_cap;
+			} else if (spl_manual_memory_cap != 0 &&
+			    spl_manual_memory_cap < new_spl_free)
+				new_spl_free = spl_manual_memory_cap;
 		}
 
 		// NOW set spl_free from calculated new_spl_free
