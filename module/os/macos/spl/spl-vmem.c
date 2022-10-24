@@ -2994,8 +2994,8 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	fail_at = segkmem_total_mem_allocated - size;
 
 	/*
-	 * adjust dynamic memory cap downwards by 1/32 (~ 3%) of physmem
-	 * but do not drop below 1/8 of physmem.
+	 * adjust dynamic memory cap downwards by 1/32 (~ 3%) of total_memory
+	 * but do not drop below 1/8 of total_memory..
 	 *
 	 * see also spl-kmem.c:spl_reduce_dynamic_cap(), which is
 	 * triggered by ARC or other clients inquiring about spl_free()
@@ -3006,12 +3006,12 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 		mutex_enter(&spl_dynamic_memory_cap_lock);
 
 		spl_dynamic_memory_cap_last_downward_adjust = gethrtime();
-		const int64_t thresh = physmem >> 3;
-		const int64_t below_fail_at = fail_at - (physmem >> 5);
+		const int64_t thresh = total_memory >> 3;
+		const int64_t below_fail_at = fail_at - (total_memory >> 5);
 		const int64_t reduced = MAX(below_fail_at, thresh);
 
 		if (spl_dynamic_memory_cap == 0 ||
-		    spl_dynamic_memory_cap >= physmem) {
+		    spl_dynamic_memory_cap >= total_memory) {
 			spl_dynamic_memory_cap = reduced;
 			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
 		} else if (thresh > spl_dynamic_memory_cap) {
