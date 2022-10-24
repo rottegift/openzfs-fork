@@ -4314,7 +4314,7 @@ spl_reduce_dynamic_cap(void)
 	 */
 	const uint64_t cap_in = spl_dynamic_memory_cap;
 
-	const uint64_t reduce_amount = physmem >> 10;
+	const uint64_t reduce_amount = physmem >> 8;
 
 	const int64_t thresh = physmem >> 3;
 
@@ -4334,9 +4334,12 @@ spl_reduce_dynamic_cap(void)
 	if (now > spl_dynamic_memory_cap_last_downward_adjust +
 	    SEC2NSEC(60)) {
 
-		if (spl_dynamic_memory_cap > reduced ||
-		    spl_dynamic_memory_cap == 0 ||
+		if (spl_dynamic_memory_cap == 0 ||
 		    spl_dynamic_memory_cap > physmem) {
+			spl_dynamic_memory_cap_last_downward_adjust = now;
+			spl_dynamic_memory_cap = physmem - reduce_amount;
+			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
+		} else if (spl_dynamic_memory_cap > reduced) {
 			spl_dynamic_memory_cap_last_downward_adjust = now;
 			spl_dynamic_memory_cap = reduced;
 			atomic_inc_64(&spl_dynamic_memory_cap_reductions);

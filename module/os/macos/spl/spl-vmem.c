@@ -3007,8 +3007,8 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 
 		spl_dynamic_memory_cap_last_downward_adjust = gethrtime();
 		const int64_t thresh = physmem >> 3;
-		const int64_t reduction = fail_at - (physmem >> 5);
-		const int64_t reduced = MAX(reduction, thresh);
+		const int64_t below_fail_at = fail_at - (physmem >> 5);
+		const int64_t reduced = MAX(below_fail_at, thresh);
 
 		if (spl_dynamic_memory_cap == 0 ||
 		    spl_dynamic_memory_cap >= physmem) {
