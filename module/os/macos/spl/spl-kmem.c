@@ -72,12 +72,15 @@ static _Atomic uint64_t spl_free_last_pressure = 0;
 
 static uint64_t spl_enforce_memory_caps = 1;
 _Atomic uint64_t spl_dynamic_memory_cap = 0;
+hrtime_t spl_dynamic_memory_cap_last_downward_adjust = 0;
+uint64_t spl_dynamic_memory_cap_skipped = 0;
 kmutex_t spl_dynamic_memory_cap_lock;
 uint64_t spl_dynamic_memory_cap_reductions = 0;
 uint64_t spl_dynamic_memory_cap_hit_floor = 0;
 static uint64_t spl_manual_memory_cap = 0;
 static uint64_t spl_memory_cap_enforcements = 0;
 
+extern void spl_set_arc_no_grow(int);
 
 /*
  * variables informed by "pure"  mach_vm_pressure interface
@@ -553,6 +556,7 @@ typedef struct spl_stats {
 
 	kstat_named_t spl_enforce_memory_caps;
 	kstat_named_t spl_dynamic_memory_cap;
+	kstat_named_t spl_dynamic_memory_cap_skipped;
 	kstat_named_t spl_dynamic_memory_cap_reductions;
 	kstat_named_t spl_dynamic_memory_cap_hit_floor;
 	kstat_named_t spl_manual_memory_cap;
@@ -641,6 +645,7 @@ static spl_stats_t spl_stats = {
 
 	{"spl_osif_enforce_memory_caps", KSTAT_DATA_UINT64},
 	{"spl_osif_dynamic_memory_cap", KSTAT_DATA_UINT64},
+	{"spl_osif_dynamic_memory_cap_skipped", KSTAT_DATA_UINT64},
 	{"spl_osif_dynamic_memory_cap_reductions", KSTAT_DATA_UINT64},
 	{"spl_osif_dynamic_memory_cap_hit_floor", KSTAT_DATA_UINT64},
 	{"spl_osif_manual_memory_cap", KSTAT_DATA_UINT64},
@@ -4309,20 +4314,37 @@ spl_reduce_dynamic_cap(void)
 	 */
 	const uint64_t cap_in = spl_dynamic_memory_cap;
 
-	const uint64_t reduction = 32LL*1024LL*1024LL;
+	const uint64_t reduction = physmem >> 10;
 
 	const uint64_t thresh = physmem >> 3;
 
+	const uint64_t reduced = MAX(cap_in - reduction, thresh);
+
+	/*
+	 * Adjust cap downwards if enough time has elapsed
+	 * for previous adjustments to shrink memory use.
+	 *
+	 * We will still tell ARC to shrink by thresh.
+	 */
 	mutex_enter(&spl_dynamic_memory_cap_lock);
 
-	if (spl_dynamic_memory_cap > thresh) {
-		spl_dynamic_memory_cap -= reduction;
-		atomic_inc_64(&spl_dynamic_memory_cap_reductions);
-	}
+	const hrtime_t now = gethrtime();
+	if (now > spl_dynamic_memory_cap_last_downward_adjust +
+	    SEC2NSEC(60)) {
 
-	if (thresh > spl_dynamic_memory_cap) {
-		spl_dynamic_memory_cap = thresh;
-		atomic_inc_64(&spl_dynamic_memory_cap_hit_floor);
+		if (spl_dynamic_memory_cap > reduced) {
+			spl_dynamic_memory_cap_last_downward_adjust = now;
+			spl_dynamic_memory_cap = reduced;
+			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
+		} else if ((int64_t)spl_dynamic_memory_cap <= thresh) {
+			spl_dynamic_memory_cap_last_downward_adjust = now;
+			spl_dynamic_memory_cap = thresh;
+			atomic_inc_64(&spl_dynamic_memory_cap_hit_floor);
+		} else {
+			atomic_inc_64(&spl_dynamic_memory_cap_skipped);
+		}
+	} else {
+		atomic_inc_64(&spl_dynamic_memory_cap_skipped);
 	}
 
 	mutex_exit(&spl_dynamic_memory_cap_lock);
@@ -4354,13 +4376,15 @@ spl_free_wrapper(void)
 		if (segkmem_total_mem_allocated >=
 		    spl_dynamic_memory_cap) {
 			atomic_inc_64(&spl_memory_cap_enforcements);
+			spl_set_arc_no_grow(B_TRUE);
 			return (spl_reduce_dynamic_cap());
 		} else if (spl_manual_memory_cap > 0 &&
 		    segkmem_total_mem_allocated >= spl_manual_memory_cap) {
+			spl_set_arc_no_grow(B_TRUE);
 			atomic_inc_64(&spl_memory_cap_enforcements);
 			const int64_t dec = spl_manual_memory_cap -
 			    segkmem_total_mem_allocated;
-			const int64_t giveback = -16LL*1024LL*1024LL;
+			const int64_t giveback = -(physmem >> 10);
 			if (dec > giveback) {
 				spl_free = giveback;
 				return (giveback);
@@ -5165,6 +5189,8 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		    spl_enforce_memory_caps;
 		ks->spl_dynamic_memory_cap.value.ui64 =
 		    spl_dynamic_memory_cap;
+		ks->spl_dynamic_memory_cap_skipped.value.ui64 =
+		    spl_dynamic_memory_cap_skipped;
 		ks->spl_dynamic_memory_cap_reductions.value.ui64 =
 		    spl_dynamic_memory_cap_reductions;
 		ks->spl_dynamic_memory_cap_hit_floor.value.ui64 =
