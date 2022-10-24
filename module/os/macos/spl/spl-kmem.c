@@ -5035,10 +5035,17 @@ spl_free_thread()
 		if (spl_enforce_memory_caps != 0) {
 			if (spl_dynamic_memory_cap != 0 &&
 			    spl_dynamic_memory_cap < new_spl_free) {
-				new_spl_free = spl_dynamic_memory_cap;
+				const int64_t m = spl_dynamic_memory_cap -
+				    segkmem_total_mem_allocated;
+				if (new_spl_free > m)
+					new_spl_free = m;
 			} else if (spl_manual_memory_cap != 0 &&
-			    spl_manual_memory_cap < new_spl_free)
-				new_spl_free = spl_manual_memory_cap;
+			    spl_manual_memory_cap < new_spl_free) {
+				const int64_t m = spl_manual_memory_cap -
+				    segkmem_total_mem_allocated;
+				if (new_spl_free > m)
+					new_spl_free = m;
+			}
 		}
 
 		// NOW set spl_free from calculated new_spl_free
