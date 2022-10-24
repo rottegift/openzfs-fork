@@ -4762,7 +4762,9 @@ spl_free_thread()
 				lowmem = true;
 				emergency_lowmem = true;
 				if (new_spl_free >= 0)
-					new_spl_free = -1024LL;
+					new_spl_free =
+					    spl_dynamic_memory_cap -
+					    segkmem_total_mem_allocated;
 				atomic_inc_64(&spl_memory_cap_enforcements);
 			} else if (spl_manual_memory_cap > 0 &&
 			    segkmem_total_mem_allocated >=
@@ -4770,7 +4772,9 @@ spl_free_thread()
 				lowmem = true;
 				emergency_lowmem = true;
 				if (new_spl_free >= 0)
-					new_spl_free = -1024LL;
+					new_spl_free =
+					    spl_manual_memory_cap -
+					    segkmem_total_mem_allocated;
 				atomic_inc_64(&spl_memory_cap_enforcements);
 			}
 		}
