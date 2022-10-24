@@ -454,6 +454,7 @@ extern void spl_free_set_emergency_pressure(int64_t p);
 extern uint64_t segkmem_total_mem_allocated;
 extern uint64_t total_memory;
 
+extern uint64_t spl_enforce_memory_caps;
 extern _Atomic uint64_t spl_dynamic_memory_cap;
 extern hrtime_t spl_dynamic_memory_cap_last_downward_adjust;
 extern kmutex_t spl_dynamic_memory_cap_lock;
@@ -2999,18 +3000,21 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 	 * see also spl-kmem.c:spl_reduce_dynamic_cap(), which is
 	 * triggered by ARC or other clients inquiring about spl_free()
 	 */
-	if (fail_at < spl_dynamic_memory_cap || spl_dynamic_memory_cap == 0) {
+	if (spl_enforce_memory_caps != 0 &&
+	    (fail_at < spl_dynamic_memory_cap ||
+	    spl_dynamic_memory_cap == 0)) {
 		mutex_enter(&spl_dynamic_memory_cap_lock);
 
 		spl_dynamic_memory_cap_last_downward_adjust = gethrtime();
 		const int64_t thresh = physmem >> 3;
-		const int64_t reduced = MAX(fail_at - (physmem >> 5), thresh);
+		const int64_t reduction = fail_at - (physmem >> 5);
+		const int64_t reduced = MAX(reduction, thresh);
 
 		if (spl_dynamic_memory_cap == 0 ||
 		    spl_dynamic_memory_cap >= physmem) {
 			spl_dynamic_memory_cap = reduced;
 			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
-		} else if (thresh > (int64_t)spl_dynamic_memory_cap) {
+		} else if (thresh > spl_dynamic_memory_cap) {
 			spl_dynamic_memory_cap = thresh;
 			atomic_inc_64(&spl_dynamic_memory_cap_hit_floor);
 		} else {
