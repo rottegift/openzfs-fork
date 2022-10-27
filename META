@@ -1,8 +1,8 @@
 Meta:          1
 Name:          zfs-macOS
 Branch:        1.0
-Version:       2.1.6rc2
-Release:       1
+Version:       2.1.6
+Release:       rc3
 Release-Tags:  relext
 License:       CDDL
 Author:        OpenZFS
