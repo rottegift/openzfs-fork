@@ -4598,7 +4598,8 @@ spl_free_thread()
 	spl_free = MAX(4*1024*1024*1024,
 	    total_memory * 75ULL / 100ULL);
 
-	spl_dynamic_memory_cap = total_memory;
+	if (spl_dynamic_memory_cap == 0)
+		spl_dynamic_memory_cap = total_memory;
 
 	mutex_enter(&spl_free_thread_lock);
 
