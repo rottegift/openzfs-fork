@@ -3751,6 +3751,8 @@ vmem_init(const char *heap_name,
 
 	VERIFY3P(initial_default_block, !=, NULL);
 
+	memset(initial_default_block, 0, INITIAL_BLOCK_SIZE);
+
 	// The default arena is very low-bandwidth; it supplies the initial
 	// large allocation for the heap arena below, and it serves as the
 	// parent of the vmem_metadata arena.   It will typically do only 2
