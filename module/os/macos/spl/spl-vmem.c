@@ -3852,17 +3852,12 @@ vmem_init(const char *heap_name,
 	// kstat.vmem.vmem.bucket_heap.parent_{alloc+free}, and improves with
 	// increasing initial fixed allocation size.
 
-	const size_t mib = 1024ULL * 1024ULL;
-	const size_t gib = 1024ULL * mib;
-	size_t resv_size = 128ULL * mib;
-	extern uint64_t real_total_memory;
+	/*
+	 * Add an initial segment to spl_heap_arena for convenience.
+	 */
 
-	if (real_total_memory >= 4ULL * gib)
-		resv_size = 256ULL * mib;
-	if (real_total_memory >= 8ULL * gib)
-		resv_size = 512ULL * mib;
-	if (real_total_memory >= 16ULL * gib)
-		resv_size = gib;
+	const size_t mib = 1024ULL * 1024ULL;
+	const size_t resv_size = 128ULL * mib;
 
 	dprintf("SPL: %s adding fixed allocation of %llu to the bucket_heap\n",
 	    __func__, (uint64_t)resv_size);
@@ -3874,6 +3869,7 @@ vmem_init(const char *heap_name,
 
 	VERIFY(spl_heap_arena_initial_alloc != NULL);
 
+	/* remember size we allocated */
 	spl_heap_arena_initial_alloc_size = resv_size;
 
 	// kstat.vmem.vmem.heap : kmem_cache_alloc() and similar calls
