@@ -463,6 +463,11 @@ extern uint64_t spl_dynamic_memory_cap_hit_floor;
 
 extern void IOSleep(unsigned milliseconds);
 
+#define INITIAL_BLOCK_SIZE 16ULL*1024ULL*1024ULL
+static char *initial_default_block = NULL;
+void *IOMallocAligned(vm_size_t size, vm_offset_t alignment);
+void IOFreeAligned(void * address, vm_size_t size);
+
 /*
  * Get a vmem_seg_t from the global segfree list.
  */
@@ -3741,8 +3746,10 @@ vmem_init(const char *heap_name,
 	// o3x is not so lucky, so we start with this
 	// Intel can go with 4096 alignment, but arm64 needs 16384. So
 	// we just use the larger.
-	static char initial_default_block[16ULL*1024ULL*1024ULL]
-	    __attribute__((aligned(16384))) = { 0 };
+	initial_default_block =
+	    IOMallocAligned(INITIAL_BLOCK_SIZE, 16384);
+
+	VERIFY3P(initial_default_block, !=, NULL);
 
 	// The default arena is very low-bandwidth; it supplies the initial
 	// large allocation for the heap arena below, and it serves as the
@@ -3750,7 +3757,7 @@ vmem_init(const char *heap_name,
 	// or 3 parent_alloc calls (to spl_vmem_default_alloc) in total.
 
 	spl_default_arena = vmem_create("spl_default_arena", // id 1
-	    initial_default_block, 16ULL*1024ULL*1024ULL,
+	    initial_default_block, INITIAL_BLOCK_SIZE,
 	    heap_quantum, spl_vmem_default_alloc, spl_vmem_default_free,
 	    spl_default_arena_parent,
 	    32, /* minimum import */
@@ -4155,6 +4162,9 @@ vmem_fini(vmem_t *heap)
 
 	dprintf("SPL: %s destroying vmem_vmem_arena\n", __func__);
 	vmem_destroy_internal(vmem_vmem_arena);
+
+	printf("SPL: %s: freeing initial_default_block\n", __func__);
+	IOFreeAligned(initial_default_block, INITIAL_BLOCK_SIZE);
 
 	printf("SPL: arenas removed, now try destroying mutexes... ");
 
