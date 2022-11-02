@@ -4157,7 +4157,7 @@ vmem_fini(vmem_t *heap)
 
 	dprintf("\nSPL: %s destroying spl_default_arena\n", __func__);
 	vmem_destroy(spl_default_arena); // parent: spl_default_arena_parent
-	dprintf("\nSPL: %s destroying spl_default_arena_parant\n", __func__);
+	dprintf("\nSPL: %s destroying spl_default_arena_parent\n", __func__);
 	vmem_destroy(spl_default_arena_parent);
 
 	dprintf("SPL: %s destroying vmem_vmem_arena\n", __func__);
