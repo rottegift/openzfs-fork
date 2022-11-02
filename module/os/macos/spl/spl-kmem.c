@@ -655,7 +655,7 @@ static spl_stats_t spl_stats = {
 	{"spl_osif_malloc_sub128k", KSTAT_DATA_UINT64},
 	{"spl_osif_malloc_sub64k", KSTAT_DATA_UINT64},
 	{"spl_osif_malloc_sub32k", KSTAT_DATA_UINT64},
-	{"spl_osif_malloc_age", KSTAT_DATA_UINT64},
+	{"spl_osif_malloc_page", KSTAT_DATA_UINT64},
 	{"spl_osif_malloc_subpage", KSTAT_DATA_UINT64},
 
 	{"spl_bucket_non_pow2_allocs", KSTAT_DATA_UINT64},
