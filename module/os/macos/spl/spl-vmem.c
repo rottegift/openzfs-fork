@@ -404,19 +404,10 @@ uint64_t spl_vmem_conditional_alloc_deny = 0;
 uint64_t spl_vmem_conditional_alloc_deny_bytes = 0;
 
 // bucket allocator kstat
-uint64_t spl_xat_success = 0;
-uint64_t spl_xat_late_success = 0;
-uint64_t spl_xat_late_success_nosleep = 0;
 uint64_t spl_xat_pressured = 0;
-uint64_t spl_xat_bailed = 0;
-uint64_t spl_xat_bailed_contended = 0;
 uint64_t spl_xat_lastalloc = 0;
 uint64_t spl_xat_lastfree = 0;
-uint64_t spl_xat_forced = 0;
 uint64_t spl_xat_sleep = 0;
-uint64_t spl_xat_late_deny = 0;
-uint64_t spl_xat_no_waiters = 0;
-uint64_t spl_xft_wait = 0;
 
 uint64_t spl_vba_fastpath = 0;
 uint64_t spl_vba_fastexit = 0;

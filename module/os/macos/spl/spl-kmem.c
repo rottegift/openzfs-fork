@@ -488,19 +488,10 @@ extern uint64_t spl_vmem_conditional_alloc_bytes;
 extern uint64_t spl_vmem_conditional_alloc_deny;
 extern uint64_t spl_vmem_conditional_alloc_deny_bytes;
 
-extern uint64_t spl_xat_success;
-extern uint64_t spl_xat_late_success;
-extern uint64_t spl_xat_late_success_nosleep;
 extern uint64_t spl_xat_pressured;
-extern uint64_t spl_xat_bailed;
-extern uint64_t spl_xat_bailed_contended;
 extern uint64_t spl_xat_lastalloc;
 extern uint64_t spl_xat_lastfree;
-extern uint64_t spl_xat_forced;
 extern uint64_t spl_xat_sleep;
-extern uint64_t spl_xat_late_deny;
-extern uint64_t spl_xat_no_waiters;
-extern uint64_t spl_xft_wait;
 
 extern uint64_t spl_vba_fastpath;
 extern uint64_t spl_vba_fastexit;
@@ -578,19 +569,11 @@ typedef struct spl_stats {
 	kstat_named_t spl_vmem_conditional_alloc_deny;
 	kstat_named_t spl_vmem_conditional_alloc_deny_bytes;
 
-	kstat_named_t spl_xat_success;
-	kstat_named_t spl_xat_late_success;
-	kstat_named_t spl_xat_late_success_nosleep;
 	kstat_named_t spl_xat_pressured;
 	kstat_named_t spl_xat_bailed;
-	kstat_named_t spl_xat_bailed_contended;
 	kstat_named_t spl_xat_lastalloc;
 	kstat_named_t spl_xat_lastfree;
-	kstat_named_t spl_xat_forced;
 	kstat_named_t spl_xat_sleep;
-	kstat_named_t spl_xat_late_deny;
-	kstat_named_t spl_xat_no_waiters;
-	kstat_named_t spl_xft_wait;
 
 	kstat_named_t spl_vba_fastpath;
 	kstat_named_t spl_vba_fastexit;
@@ -667,19 +650,10 @@ static spl_stats_t spl_stats = {
 	{"vmem_conditional_alloc_deny", KSTAT_DATA_UINT64},
 	{"vmem_conditional_alloc_deny_bytes", KSTAT_DATA_UINT64},
 
-	{"spl_xat_success", KSTAT_DATA_UINT64},
-	{"spl_xat_late_success", KSTAT_DATA_UINT64},
-	{"spl_xat_late_success_nosleep", KSTAT_DATA_UINT64},
 	{"spl_xat_pressured", KSTAT_DATA_UINT64},
-	{"spl_xat_bailed", KSTAT_DATA_UINT64},
-	{"spl_xat_bailed_contended", KSTAT_DATA_UINT64},
 	{"spl_xat_lastalloc", KSTAT_DATA_UINT64},
 	{"spl_xat_lastfree", KSTAT_DATA_UINT64},
-	{"spl_xat_forced", KSTAT_DATA_UINT64},
 	{"spl_xat_sleep", KSTAT_DATA_UINT64},
-	{"spl_xat_late_deny", KSTAT_DATA_UINT64},
-	{"spl_xat_no_waiters", KSTAT_DATA_UINT64},
-	{"spl_xft_wait", KSTAT_DATA_UINT64},
 
 	{"spl_vba_fastpath", KSTAT_DATA_UINT64},
 	{"spl_vba_fastexit", KSTAT_DATA_UINT64},
@@ -5250,21 +5224,10 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		ks->spl_vmem_conditional_alloc_deny_bytes.value.ui64 =
 		    spl_vmem_conditional_alloc_deny_bytes;
 
-		ks->spl_xat_success.value.ui64 = spl_xat_success;
-		ks->spl_xat_late_success.value.ui64 = spl_xat_late_success;
-		ks->spl_xat_late_success_nosleep.value.ui64 =
-		    spl_xat_late_success_nosleep;
 		ks->spl_xat_pressured.value.ui64 = spl_xat_pressured;
-		ks->spl_xat_bailed.value.ui64 = spl_xat_bailed;
-		ks->spl_xat_bailed_contended.value.ui64 =
-		    spl_xat_bailed_contended;
 		ks->spl_xat_lastalloc.value.ui64 = spl_xat_lastalloc;
 		ks->spl_xat_lastfree.value.ui64 = spl_xat_lastfree;
-		ks->spl_xat_forced.value.ui64 = spl_xat_forced;
 		ks->spl_xat_sleep.value.ui64 = spl_xat_sleep;
-		ks->spl_xat_late_deny.value.ui64 = spl_xat_late_deny;
-		ks->spl_xat_no_waiters.value.ui64 = spl_xat_no_waiters;
-		ks->spl_xft_wait.value.ui64 = spl_xft_wait;
 
 		ks->spl_vba_fastpath.value.ui64 =
 		    spl_vba_fastpath;
