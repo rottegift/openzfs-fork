@@ -39,6 +39,13 @@ then
     exit 0;
 fi
 
+# smd: if rpool already imported it's because we probably booted from it;
+# unless we are told otherwise, mount all the filesystems
+if [ ! -f /etc/zfs/noautomount ];
+then
+    ${ZPOOL} list rpool && ${ZFS} mount -a
+fi
+
 date
 echo "-zpool-import-all.sh"
 
