@@ -1451,7 +1451,7 @@ zfs_vnop_create(struct vnop_create_args *ap)
 
 
 	error = zfs_create(VTOZ(ap->a_dvp), cnp->cn_nameptr, vap, excl, mode,
-	    &zp, cr, 0, NULL);
+	    &zp, cr, 0, NULL, NULL);
 	if (!error) {
 		cache_purge_negatives(ap->a_dvp);
 		*ap->a_vpp = ZTOV(zp);
@@ -1740,7 +1740,7 @@ zfs_vnop_mkdir(struct vnop_mkdir_args *ap)
 	znode_t *zp = NULL;
 	ap->a_vap->va_mode |= S_IFDIR;
 	error = zfs_mkdir(VTOZ(ap->a_dvp), ap->a_cnp->cn_nameptr, ap->a_vap,
-	    &zp, cr, /* flags */0, /* vsecp */NULL);
+	    &zp, cr, /* flags */0, /* vsecp */NULL, NULL);
 	if (!error) {
 		*ap->a_vpp = ZTOV(zp);
 		cache_purge_negatives(ap->a_dvp);
@@ -2026,7 +2026,8 @@ zfs_vnop_setattr(struct vnop_setattr_args *ap)
 
 	}
 
-	error = zfs_setattr(VTOZ(ap->a_vp), ap->a_vap, /* flag */0, cr);
+	error = zfs_setattr(VTOZ(ap->a_vp), ap->a_vap, /* flag */0, cr,
+	    NULL);
 
 	dprintf("vnop_setattr: called on vp %p with mask %04x, err=%d\n",
 	    ap->a_vp, mask, error);
@@ -2115,7 +2116,8 @@ zfs_vnop_rename(struct vnop_rename_args *ap)
 	 *     int flags);
 	 */
 	error = zfs_rename(VTOZ(ap->a_fdvp), ap->a_fcnp->cn_nameptr,
-		VTOZ(ap->a_tdvp), ap->a_tcnp->cn_nameptr, cr, /* flags */0);
+		VTOZ(ap->a_tdvp), ap->a_tcnp->cn_nameptr, cr, /* flags */0,
+	    /* rflags */ 0, NULL, NULL);
 
 	if (!error) {
 		cache_purge_negatives(ap->a_fdvp);
@@ -2188,7 +2190,7 @@ zfs_vnop_renamex(struct vnop_renamex_args *ap)
 	 */
 	error = zfs_rename(VTOZ(ap->a_fdvp), ap->a_fcnp->cn_nameptr,
 		VTOZ(ap->a_tdvp), ap->a_tcnp->cn_nameptr, cr,
-		(ap->a_flags&VFS_RENAME_EXCL));
+		(ap->a_flags&VFS_RENAME_EXCL), 0, NULL, NULL);
 
 	if (!error) {
 		cache_purge_negatives(ap->a_fdvp);
@@ -2254,7 +2256,7 @@ zfs_vnop_symlink(struct vnop_symlink_args *ap)
 	znode_t *zp = NULL;
     ap->a_vap->va_mode |= S_IFLNK;
 	error = zfs_symlink(VTOZ(ap->a_dvp), ap->a_cnp->cn_nameptr,
-	    ap->a_vap, ap->a_target, &zp, cr, 0);
+	    ap->a_vap, ap->a_target, &zp, cr, 0, NULL);
 	if (!error) {
 		*ap->a_vpp = ZTOV(zp);
 		cache_purge_negatives(ap->a_dvp);
@@ -3619,7 +3621,7 @@ zfs_vnop_getxattr(struct vnop_getxattr_args *ap)
 	}
 
 
-	dprintf("%s: return 0 size %d\n", __func__, retsize);
+	dprintf("%s: return 0 size %ld\n", __func__, retsize);
 
 	return (0);
 }
@@ -3942,7 +3944,7 @@ zfs_vnop_makenamedstream(struct vnop_makenamedstream_args *ap)
 	VATTR_SET(&vattr, va_mode, VTOZ(vp)->z_mode & ~S_IFMT);
 
 	error = zfs_create(xdzp, (char *)ap->a_name, &vattr, NONEXCL,
-	    VTOZ(vp)->z_mode, &xzp, cr, 0, NULL);
+	    VTOZ(vp)->z_mode, &xzp, cr, 0, NULL, NULL);
 
 	if (error == 0)
 		*ap->a_svpp = ZTOV(xzp);

@@ -2701,9 +2701,6 @@ zfs_resume_fs(zfsvfs_t *zfsvfs, dsl_dataset_t *ds)
 	for (zp = list_head(&zfsvfs->z_all_znodes); zp;
 	    zp = list_next(&zfsvfs->z_all_znodes, zp)) {
 		err2 = zfs_rezget(zp);
-		if (err2) {
-			zp->z_is_stale = B_TRUE;
-		}
 
 		/* see comment in zfs_suspend_fs() */
 		if (zp->z_suspended) {
