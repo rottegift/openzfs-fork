@@ -142,6 +142,8 @@ extern void kmem_strfree(char *str);
 char *kmem_vasprintf(const char *fmt, va_list ap);
 char *kmem_strstr(const char *in, const char *str);
 void strident_canon(char *s, size_t n);
+extern int kmem_scnprintf(char *str, size_t size,
+	const char *fmt, ...);
 
 boolean_t spl_arc_no_grow(size_t, boolean_t, kmem_cache_t **);
 
