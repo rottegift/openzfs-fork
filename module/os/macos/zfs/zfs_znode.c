@@ -209,7 +209,7 @@ zfs_znode_hold_cache_constructor(void *buf, void *arg, int kmflags)
 	znode_hold_t *zh = buf;
 
 	mutex_init(&zh->zh_lock, NULL, MUTEX_DEFAULT, NULL);
-	zfs_refcount_create(&zh->zh_refcount);
+	zh->zh_refcount = 0;
 	zh->zh_obj = ZFS_NO_OBJECT;
 
 	return (0);
@@ -221,7 +221,6 @@ zfs_znode_hold_cache_destructor(void *buf, void *arg)
 	znode_hold_t *zh = buf;
 
 	mutex_destroy(&zh->zh_lock);
-	zfs_refcount_destroy(&zh->zh_refcount);
 }
 
 void
@@ -334,7 +333,8 @@ zfs_znode_hold_enter(zfsvfs_t *zfsvfs, uint64_t obj)
 		ASSERT3U(zh->zh_obj, ==, obj);
 		found = B_TRUE;
 	}
-	zfs_refcount_add(&zh->zh_refcount, NULL);
+	zh->zh_refcount++;
+	ASSERT3S(zh->zh_refcount, >, 0);
 	mutex_exit(&zfsvfs->z_hold_locks[i]);
 
 	if (found == B_TRUE)
@@ -358,7 +358,8 @@ zfs_znode_hold_exit(zfsvfs_t *zfsvfs, znode_hold_t *zh)
 	mutex_exit(&zh->zh_lock);
 
 	mutex_enter(&zfsvfs->z_hold_locks[i]);
-	if (zfs_refcount_remove(&zh->zh_refcount, NULL) == 0) {
+	ASSERT3S(zh->zh_refcount, >, 0);
+	if (--zh->zh_refcount == 0) {
 		avl_remove(&zfsvfs->z_hold_trees[i], zh);
 		remove = B_TRUE;
 	}
@@ -2042,7 +2043,7 @@ zfs_create_fs(objset_t *os, cred_t *cr, nvlist_t *zplprops, dmu_tx_t *tx)
 
 	rootzp->z_zfsvfs = zfsvfs;
 	VERIFY(0 == zfs_acl_ids_create(rootzp, IS_ROOT_NODE, &vattr,
-	    cr, NULL, &acl_ids));
+	    cr, NULL, &acl_ids, NULL));
 	zfs_mknode(rootzp, &vattr, tx, cr, IS_ROOT_NODE, &zp, &acl_ids);
 	ASSERT3P(zp, ==, rootzp);
 	error = zap_add(os, moid, ZFS_ROOT_OBJ, 8, 1, &rootzp->z_id, tx);
