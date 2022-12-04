@@ -50,12 +50,6 @@ x:
 	.size	x, [.-x]
 #endif
 
-#if defined(__linux__) && defined(CONFIG_SLS)
-#define	RET	ret; int3
-#else
-#define	RET	ret
-#endif
-
 /*
  * Setjmp and longjmp implement non-local gotos using state vectors
  * type label_t.
