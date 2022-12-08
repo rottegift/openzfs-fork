@@ -354,7 +354,7 @@ zfs_znode_hold_exit(zfsvfs_t *zfsvfs, znode_hold_t *zh)
 	boolean_t remove = B_FALSE;
 
 	ASSERT(zfs_znode_held(zfsvfs, zh->zh_obj));
-	ASSERT3S(zfs_refcount_count(&zh->zh_refcount), >, 0);
+	//ASSERT3S(zfs_refcount_count(&zh->zh_refcount), >, 0);
 	mutex_exit(&zh->zh_lock);
 
 	mutex_enter(&zfsvfs->z_hold_locks[i]);
