@@ -1216,16 +1216,33 @@ ldi_iokit_io_intr(void *target, void *parameter,
 	if (actualByteCount == 0 ||
 	    actualByteCount != lbp->b_bcount ||
 	    status != kIOReturnSuccess) {
-		printf("%s %s %llx / %llx\n", __func__,
-		    "actualByteCount != lbp->b_bcount",
-		    actualByteCount, lbp->b_bcount);
-		if (ldi_zfs_handle)
-			printf("%s status %d %d %s\n", __func__, status,
+		printf("%s actualByteCOunt != lbp->b_count "
+		    "%llx / %llx, "
+		    "bufsize %llx lbkno %llx resid %llx "
+		    "flags %x err %x\n",
+		    __func__,
+		    actualByteCount, lbp->b_bcount,
+		    lbp->b_bufsize, lbp->b_lblkno, lbp->b_resid,
+		    lbp->b_flags, lbp->b_error);
+		if (ldi_zfs_handle) {
+			const char *s = ldi_zfs_handle->stringFromReturn(status);
+			printf("%s have handle: status %x, status %d, %s, "
+			    "err %x, bufsize %llx lblkno %llx resid %llx "
+			    "flags %x\n",
+			    __func__, status,
 			    ldi_zfs_handle->errnoFromReturn(status),
-			    ldi_zfs_handle->stringFromReturn(status));
-		else
-			printf("%s status %d ldi_zfs_handle is NULL\n",
-			    __func__, status);
+			    (s != NULL) ? s : "no stringFromReturn",
+			    lbp->b_error, lbp->b_bufsize, lbp->b_lblkno,
+			    lbp->b_resid, lbp->b_flags);
+		} else {
+			printf("%s status %x, ldi_zfs_handle is NULL, "
+			    "err %x, bufsize %llx lblkno %llx resid %llx "
+			    "flags %x\n",
+			    __func__, status,
+			    lbp->b_error,
+			    lbp->b_bufsize, lbp->b_lblkno, lbp->b_resid,
+			    lbp->b_flags);
+		}
 	}
 #endif
 
@@ -1335,15 +1352,33 @@ buf_strategy_iokit(ldi_buf_t *lbp, struct ldi_handle *lhp)
 #if !defined(MAC_OS_X_VERSION_10_9) || \
   (MAC_OS_X_VERSION_MIN_REQUIRED > MAC_OS_X_VERSION_10_9)
 	/* Priority of I/O */
+	ioattr.priority = kIOStoragePriorityDefault;
+
+	/* higher priority is lower numerical value */
+
+	if (lbp->b_flags & B_ASYNC) {
+		ioattr.priority++;
+	}
+
+	if (lbp->b_flags & B_WRITE) {
+		ioattr.priority--;
+	}
+
 	if (lbp->b_flags & B_THROTTLED_IO) {
-		lbp->b_flags &= ~B_THROTTLED_IO;
-		ioattr.priority = kIOStoragePriorityBackground;
-		if (lbp->b_flags & B_WRITE)
-			ioattr.priority--;
-	} else if ((lbp->b_flags & B_ASYNC) == 0 || (lbp->b_flags & B_WRITE))
-		ioattr.priority = kIOStoragePriorityDefault - 1;
-	else
-		ioattr.priority = kIOStoragePriorityDefault;
+		ioattr.priority = kIOStoragePriorityLow;
+	}
+
+	if (lbp->b_flags & B_FUA) {
+		/*
+		 * We possibly want to ask IOKit to do a force unit access or
+		 * equivalent here, but this requires further plumbing and
+		 * likely state about whether a device will error on FUA; for
+		 * now just prioritize the IO.  Anyway, ZIO & ZIL use
+		 * DKIOFLUSHWRITECACHE.
+		 */
+		ioattr.priority = kIOStoragePriorityHigh;
+	}
+
 #endif
 
 	/*

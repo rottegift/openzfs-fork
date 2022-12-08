@@ -1813,6 +1813,23 @@ kmem_depot_ws_reap(kmem_cache_t *cp)
 	ASSERT(!list_link_active(&cp->cache_link) ||
 	    taskq_member(kmem_taskq, curthread));
 
+	bool mtx_contended = false;
+
+	if (!mutex_tryenter(&cp->cache_reap_lock)) {
+		mtx_contended = true;
+		printf("ZFS: SPL: %s:%s:%d: could not get lock\n",
+		    __FILE__, __func__, __LINE__);
+		extern void IOSleep(unsigned milliseconds);
+		IOSleep(1);
+		mutex_enter(&cp->cache_reap_lock);
+	}
+
+	if (mtx_contended)
+		printf("ZFS: SPL: %s:%s:%d: reap mutex for %s "
+		    "was contended\n",
+		    __FILE__, __func__, __LINE__,
+		    cp->cache_name);
+
 	reap = MIN(cp->cache_full.ml_reaplimit, cp->cache_full.ml_min);
 	while (reap-- &&
 	    (mp = kmem_depot_alloc(cp, &cp->cache_full)) != NULL) {
@@ -1834,6 +1851,8 @@ kmem_depot_ws_reap(kmem_cache_t *cp)
 			bytes = 0;
 		}
 	}
+
+	mutex_exit(&cp->cache_reap_lock);
 }
 
 static void
@@ -3701,6 +3720,8 @@ kmem_cache_create(
 
 	cp->cache_color = cp->cache_mincolor;
 
+	mutex_init(&cp->cache_reap_lock, NULL, MUTEX_DEFAULT, NULL);
+
 	/*
 	 * Initialize the rest of the slab layer.
 	 */
@@ -3923,6 +3944,13 @@ kmem_cache_destroy(kmem_cache_t *cp)
 
 	kmem_cache_magazine_purge(cp);
 
+	/*
+	 * make sure there isn't a reaper
+	 * since it would dereference cp
+	 */
+	mutex_enter(&cp->cache_reap_lock);
+	mutex_exit(&cp->cache_reap_lock);
+
 	mutex_enter(&cp->cache_lock);
 
 	if (cp->cache_buftotal != 0)
@@ -3965,6 +3993,7 @@ kmem_cache_destroy(kmem_cache_t *cp)
 
 	mutex_destroy(&cp->cache_depot_lock);
 	mutex_destroy(&cp->cache_lock);
+	mutex_destroy(&cp->cache_reap_lock);
 
 	vmem_free_impl(kmem_cache_arena, cp, KMEM_CACHE_SIZE(max_ncpus));
 }
