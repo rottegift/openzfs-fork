@@ -126,14 +126,17 @@ void spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc);
 #ifdef SPL_DEBUG_MUTEX
 #define	mutex_enter(X) spl_mutex_enter((X), __FILE__, __LINE__)
 void spl_mutex_enter(kmutex_t *mp, const char *file, int line);
+#define mutex_destroy(X) { membar_consumer(); \
+	VERIFY3P(spl_mutex_owner, ==, NULL);  \
+	spl_mutex_destroy(X); }
 #else
 #define	mutex_enter spl_mutex_enter
 void spl_mutex_enter(kmutex_t *mp);
+#define mutex_destroy spl_mutex_destroy
 #endif
 
 #define	mutex_enter_nested(A, B)	mutex_enter(A)
 
-#define	mutex_destroy spl_mutex_destroy
 #define	mutex_exit spl_mutex_exit
 #define	mutex_tryenter spl_mutex_tryenter
 #define	mutex_owned spl_mutex_owned
