@@ -59,8 +59,8 @@ uint64_t zfs_active_mutex = 0;
 #ifdef SPL_DEBUG_MUTEX
 #include <sys/list.h>
 static list_t mutex_list;
-static kmutex_t mutex_list_mutex;
-static kcondvar_t mutex_list_cv;
+static wrapper_mutex_t mutex_list_mtx;
+static uint64_t mutex_list_wait_loc;
 
 
 struct leak {
@@ -69,12 +69,19 @@ struct leak {
 #define	SPL_DEBUG_MUTEX_MAXCHAR 32
 	char		location_file[SPL_DEBUG_MUTEX_MAXCHAR];
 	char		location_function[SPL_DEBUG_MUTEX_MAXCHAR];
-	uint64_t	location_line;
+	int		location_line;
 	void		*mp;
 
 	uint64_t	wdlist_locktime;	// time lock was taken
-	char		wdlist_file[32];	// storing holder
-	uint64_t	wdlist_line;
+	hrtime_t	wdlist_mutex_created_time;
+	char		creation_file[SPL_DEBUG_MUTEX_MAXCHAR];
+	char		creation_function[SPL_DEBUG_MUTEX_MAXCHAR];
+	int		creation_line;
+	uint64_t	wdlist_total_lock_count;
+	uint64_t	wdlist_total_trylock_success;
+	uint64_t	wdlist_total_trylock_miss;
+	uint32_t	wdlist_period_lock_count;
+	uint32_t	wdlist_period_trylock_miss;
 };
 
 static int wdlist_exit = 0;
@@ -83,23 +90,37 @@ void
 spl_wdlist_settime(void *mpleak, uint64_t value)
 {
 	struct leak *leak = (struct leak *)mpleak;
-	if (!leak)
-		return;
-	leak->wdlist_locktime = value;
+	VERIFY3P(leak, !=, NULL);
+	atomic_store_nonatomic(&leak->wdlist_locktime, value);
 }
 
 inline static void
 spl_wdlist_check(void *ignored)
 {
 	struct leak *mp;
+	uint64_t prev_noe = gethrestime_sec(); /* we time in seconds */
+
 	printf("SPL: Mutex watchdog is alive\n");
 
-	mutex_enter(&mutex_list_mutex);
+	lck_mtx_lock((lck_mtx_t *)&mutex_list_mtx);
+
 	while (!wdlist_exit) {
 
-		(void) cv_timedwait(&mutex_list_cv,
-		    &mutex_list_mutex, ddi_get_lbolt() +
-		    SEC_TO_TICK(SPL_MUTEX_WATCHDOG_SLEEP));
+		struct timespec ts = { .tv_sec = SPL_MUTEX_WATCHDOG_SLEEP };
+		int msleep_result;
+
+		/* only this thread can modify these */
+		static uint32_t period_lock_record_holder = 0;
+		static uint32_t period_miss_record_holder = 0;
+
+		msleep_result = msleep((caddr_t)&mutex_list_wait_loc,
+		    (lck_mtx_t *)&mutex_list_mtx, PRIBIO,
+		    "mutex watchdog napping",
+		    &ts);
+
+		ASSERT3S(msleep_result, ==, EAGAIN);
+
+		spl_data_barrier();
 
 		uint64_t noe = gethrestime_sec();
 		for (mp = list_head(&mutex_list);
@@ -109,16 +130,63 @@ spl_wdlist_check(void *ignored)
 			if ((locktime > 0) && (noe > locktime) &&
 			    noe - locktime >= SPL_MUTEX_WATCHDOG_TIMEOUT) {
 				printf("SPL: mutex (%p) held for %llus by "
-				    "'%s':%llu\n", mp, noe -
-				    mp->wdlist_locktime, mp->wdlist_file,
-				    mp->wdlist_line);
+				    "'%s':%s:%d\n", mp,
+				    noe - mp->wdlist_locktime,
+				    mp->location_file,
+				    mp->location_function,
+				    mp->location_line);
 			} // if old
+
+#define	HIGH_LOCKS_PER_RUN		10000
+#define	HIGH_TRYLOCK_MISS_PER_RUN	100
+
+			const uint32_t period_locks = atomic_swap_32(
+			    &mp->wdlist_period_lock_count, 0);
+			const uint32_t period_trymiss = atomic_swap_32(
+			    &mp->wdlist_period_trylock_miss, 0);
+
+			if (period_locks > HIGH_LOCKS_PER_RUN &&
+			    period_locks >
+			    (period_lock_record_holder * 100) / 90) {
+				printf("SPL: hot lock mutex (%p)"
+				    " [created %s:%s:%d]"
+				    " locked %u times in %llu seconds,"
+				    " hottest was %u\n",
+				    mp,
+				    mp->creation_file, mp->creation_function,
+				    mp->creation_line, period_locks,
+				    noe - prev_noe,
+				    period_lock_record_holder);
+				if (period_locks > period_lock_record_holder)
+					period_lock_record_holder =
+					    period_locks;
+			}
+
+			if (period_trymiss > HIGH_TRYLOCK_MISS_PER_RUN &&
+			    period_trymiss > (period_miss_record_holder *
+			    90) / 100) {
+				printf("SPL: hot miss mutex (%p)"
+				    " [created %s:%s:%d]"
+				    " had %u mutex_trylock misses in"
+				    " %llu seconds, hottest was %u\n",
+				    mp,
+				    mp->creation_file, mp->creation_function,
+				    mp->creation_line, period_trymiss,
+				    noe - prev_noe,
+				    period_miss_record_holder);
+				if (period_trymiss > period_miss_record_holder)
+					period_miss_record_holder =
+					    period_trymiss;
+			}
+
 		} // for all
+		prev_noe = noe;
 	} // while not exit
 
 	wdlist_exit = 0;
-	cv_signal(&mutex_list_cv);
-	mutex_exit(&mutex_list_mutex);
+	spl_data_barrier();
+	wakeup_one((caddr_t)&mutex_list_wait_loc);
+	lck_mtx_unlock((lck_mtx_t *)&mutex_list_mtx);
 
 	printf("SPL: watchdog thread exit\n");
 	thread_exit();
@@ -145,17 +213,16 @@ spl_mutex_subsystem_init(void)
 			if (mutex[i] != 0xAF)
 				break;
 
-		printf("SPL: mutex size is %u\n", i+1);
+		printf("SPL: %s:%d: mutex size is %u\n",
+		    __func__, __LINE__, i+1);
 
 	}
 
 	list_create(&mutex_list, sizeof (struct leak),
 	    offsetof(struct leak, mutex_leak_node));
 	/* We can not call mutex_init() as it would use "leak" */
-	lck_mtx_init((lck_mtx_t *)&mutex_list_mutex.m_lock, zfs_mutex_group,
+	lck_mtx_init((lck_mtx_t *)&mutex_list_mtx, zfs_mutex_group,
 	    zfs_lock_attr);
-	mutex_list_mutex.m_initialised = MUTEX_INIT;
-	cv_init(&mutex_list_cv, NULL, CV_DEFAULT, NULL);
 
 	/* create without timesharing or qos */
 	(void) thread_create_named_with_extpol_and_qos(
@@ -171,9 +238,26 @@ spl_mutex_subsystem_fini(void)
 {
 #ifdef SPL_DEBUG_MUTEX
 	uint64_t total = 0;
-	printf("Dumping leaked mutex allocations...\n");
+	printf("SPL: %s:%d: Dumping leaked mutex allocations..."
+	    " zfs_active_mutex == %llu\n",
+	    __func__, __LINE__, atomic_load_64(&zfs_active_mutex));
 
-	mutex_enter(&mutex_list_mutex);
+	/* Ask the thread to quit */
+	lck_mtx_lock((lck_mtx_t *)&mutex_list_mtx);
+	wdlist_exit = 1;
+	spl_data_barrier();
+	while (wdlist_exit) {
+		wakeup_one((caddr_t)&mutex_list_wait_loc);
+		msleep((caddr_t)&mutex_list_wait_loc,
+		    (lck_mtx_t *)&mutex_list_mtx,
+		    PRIBIO, "waiting for mutex watchdog thread to end", 0);
+		spl_data_barrier();
+	}
+
+	/* mutex watchdog thread has quit, we hold the mutex */
+
+	/* walk the leak list */
+
 	while (1) {
 		struct leak *leak, *runner;
 		uint32_t found;
@@ -206,34 +290,46 @@ spl_mutex_subsystem_fini(void)
 
 		} // for all nodes
 
-		printf("  mutex %p : %s %s %llu : # leaks: %u\n",
+		printf("SPL: %s:%d  mutex %p : last lock %s %s %d :"
+		    " # leaks: %u"
+		    " created %llu seconds ago at %s:%s:%d"
+		    " locked %llu,"
+		    "try_s %llu try_w %llu\n",
+		    __func__, __LINE__,
 		    leak->mp,
 		    leak->location_file,
 		    leak->location_function,
 		    leak->location_line,
-		    found);
+		    found,
+		    NSEC2SEC(gethrtime() - leak->wdlist_mutex_created_time),
+		    leak->creation_file,
+		    leak->creation_function,
+		    leak->creation_line,
+		    leak->wdlist_total_lock_count,
+		    leak->wdlist_total_trylock_success,
+		    leak->wdlist_total_trylock_miss);
 
 		IOFreeType(leak, struct leak);
 		total += found;
 
 	}
-	mutex_exit(&mutex_list_mutex);
-	printf("Dumped %llu leaked allocations. Wait for watchdog "
-	    "to exit..\n", total);
+	lck_mtx_unlock((lck_mtx_t *)&mutex_list_mtx);
 
-	/* Asking for it to quit */
-	mutex_enter(&mutex_list_mutex);
-	wdlist_exit = 1;
-	while (wdlist_exit) {
-		cv_signal(&mutex_list_cv);
-		cv_wait(&mutex_list_cv, &mutex_list_mutex);
-	}
-	mutex_exit(&mutex_list_mutex);
+	printf("SPL: %s:%d Dumped %llu leaked allocations.\n",
+	    __func__, __LINE__, total);
+
 	/* We can not call mutex_destroy() as it uses leak */
-	lck_mtx_destroy((lck_mtx_t *)&mutex_list_mutex.m_lock, zfs_mutex_group);
-	cv_destroy(&mutex_list_cv);
+	lck_mtx_destroy((lck_mtx_t *)&mutex_list_mtx, zfs_mutex_group);
 	list_destroy(&mutex_list);
 #endif
+
+	if (atomic_load_64(&zfs_active_mutex) != 0) {
+		printf("SPL: %s:%d: zfs_active_mutex is %llu\n",
+		    __func__, __LINE__, atomic_load_64(&zfs_active_mutex));
+	} else {
+		printf("SPL: %s: good, zero zfs_active_mutex\n",
+		    __func__);
+	}
 
 	lck_attr_free(zfs_lock_attr);
 	zfs_lock_attr = NULL;
@@ -250,21 +346,21 @@ spl_mutex_subsystem_fini(void)
 #ifdef SPL_DEBUG_MUTEX
 void
 spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc,
-    const char *file, const char *fn, int line)
+    const char *file, const char *fn, const int line)
 #else
 void
 spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 #endif
 {
 	ASSERT(type != MUTEX_SPIN);
-	ASSERT(ibc == NULL);
+	ASSERT3P(ibc, ==, NULL);
 
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, !=, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), !=, MUTEX_INIT);
 #endif
 
 	lck_mtx_init((lck_mtx_t *)&mp->m_lock, zfs_mutex_group, zfs_lock_attr);
-    mp->m_owner = NULL;
+	mp->m_owner = NULL;
 	mp->m_waiters = 0;
 	mp->m_sleepers = 0;
 
@@ -277,23 +373,26 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 
 	leak = IOMallocType(struct leak);
 
-	if (leak) {
-		memset(leak, 0, sizeof (struct leak));
-		strlcpy(leak->location_file, file, SPL_DEBUG_MUTEX_MAXCHAR);
-		strlcpy(leak->location_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
-		leak->location_line = line;
-		leak->mp = mp;
+	VERIFY3P(leak, !=, NULL);
 
-		mutex_enter(&mutex_list_mutex);
-		list_link_init(&leak->mutex_leak_node);
-		list_insert_tail(&mutex_list, leak);
-		mp->leak = leak;
-		mutex_exit(&mutex_list_mutex);
-	}
-	leak->wdlist_locktime = 0;
-	leak->wdlist_file[0] = 0;
-	leak->wdlist_line = 0;
+	memset(leak, 0, sizeof (struct leak));
+
+	leak->wdlist_mutex_created_time = gethrtime();
+	strlcpy(leak->location_file, file, SPL_DEBUG_MUTEX_MAXCHAR);
+	strlcpy(leak->location_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
+	leak->location_line = line;
+	strlcpy(leak->creation_file, file, SPL_DEBUG_MUTEX_MAXCHAR);
+	strlcpy(leak->creation_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
+	leak->creation_line = line;
+	leak->mp = mp;
+
+	lck_mtx_lock((lck_mtx_t *)&mutex_list_mtx);
+	list_link_init(&leak->mutex_leak_node);
+	list_insert_tail(&mutex_list, leak);
+	mp->leak = leak;
+	lck_mtx_unlock((lck_mtx_t *)&mutex_list_mtx);
 #endif
+
 }
 
 void
@@ -303,10 +402,10 @@ spl_mutex_destroy(kmutex_t *mp)
 		return;
 
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, ==, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
 #endif
 
-	if (mp->m_owner != 0)
+	if (atomic_load_nonatomic(&mp->m_owner) != 0)
 		panic("SPL: releasing held mutex");
 
 	lck_mtx_destroy((lck_mtx_t *)&mp->m_lock, zfs_mutex_group);
@@ -314,55 +413,183 @@ spl_mutex_destroy(kmutex_t *mp)
 	atomic_dec_64(&zfs_active_mutex);
 
 #ifdef SPL_DEBUG_MUTEX
-	mp->m_initialised = MUTEX_DESTROYED;
+	atomic_store_nonatomic(&mp->m_initialised, MUTEX_DESTROYED);
 
-	if (mp->leak) {
-		struct leak *leak = (struct leak *)mp->leak;
-		mutex_enter(&mutex_list_mutex);
-		list_remove(&mutex_list, leak);
-		mp->leak = NULL;
-		mutex_exit(&mutex_list_mutex);
-		IOFreeType(leak, struct leak);
+	struct leak *leak = (struct leak *)mp->leak;
+
+	VERIFY3P(leak, !=, NULL);
+
+	/* WAGs, but they rise dynamically on very fast&busy systems */
+
+#define	BUSY_LOCK_THRESHOLD			1000 * 1000
+#define	BUSY_LOCK_PER_SECOND_THRESHOLD		1000
+
+	/*
+	 * Multiple mutex_destroy() can be in flight from different
+	 * threads, so these have to be protected.  Easiest to do
+	 * with an _Atomic declaration, since we're just doing
+	 * straightforward compares and new-value stores, and it does not
+	 * especially matter what order the mutex_destroy()s arrive in,
+	 * i.e., ACQUIRE/RELEASE/ACQ_REL memory order would be fine here,
+	 * and we are very likely to be happy with what an Apple Silicon
+	 * compiler chooses as default here.  See comment further below.
+	 */
+	static _Atomic uint64_t busy_lock_per_second_record_holder = 0;
+
+	if (leak->wdlist_total_lock_count > BUSY_LOCK_THRESHOLD) {
+		const hrtime_t nsage =
+		    gethrtime() - leak->wdlist_mutex_created_time;
+		const uint64_t secage = NSEC2SEC(nsage) + 1;
+		const uint64_t meanlps = leak->wdlist_total_lock_count / secage;
+		const uint64_t hot_thresh =
+		    (busy_lock_per_second_record_holder * 100) / 90;
+
+		if (meanlps > BUSY_LOCK_PER_SECOND_THRESHOLD &&
+		    meanlps > hot_thresh) {
+			printf("SPL: %s:%d: destroyed hot lock (mean lps %llu)"
+			    " %llu mutex_enters since creation at %s:%s:%d"
+			    " %llu seconds ago (hot was %llu lps)\n",
+			    __func__, __LINE__,
+			    meanlps,
+			    leak->wdlist_total_lock_count,
+			    leak->creation_file, leak->creation_function,
+			    leak->creation_line,
+			    secage,
+			    busy_lock_per_second_record_holder);
+			/*
+			 * We permit a small race here to avoid a mutex
+			 * locking out any concurrent mutex_destroy(); it is
+			 * possible that another thread is right here (for a
+			 * different mutex than this one) with its meanlps
+			 * higher than THIS meanlps, in which case the record
+			 * may end up being either one.  We get some relief on
+			 * this from spl_data_barrier()s ordering the xnu
+			 * locking/unlocking, and being wrong is far from fatal,
+			 * since it only controls when we do the printf above.
+			 * This is likely to be a real-world race, but not
+			 * worth coding an atomic-compare-exchange loop.
+			 */
+			if (meanlps > busy_lock_per_second_record_holder)
+				busy_lock_per_second_record_holder = meanlps;
+		}
 	}
+
+#define	TRYLOCK_CALL_THRESHOLD	1000 * 1000
+#define	TRYLOCK_WAIT_MIN_PCT	2		// mutex_trylock misses as %
+
+
+	const uint64_t try_calls =
+	    leak->wdlist_total_trylock_success +
+	    leak->wdlist_total_trylock_miss;
+	const uint64_t try_misses =
+	    leak->wdlist_total_trylock_miss;
+
+	if (try_misses > 0 && try_calls > TRYLOCK_CALL_THRESHOLD) {
+		const uint64_t notheldpct =
+		    (try_misses * 100) / try_calls;
+
+		if (notheldpct > TRYLOCK_WAIT_MIN_PCT) {
+			printf("SPL: %s:%d: destroyed lock which"
+			    " waited often in mutex_trylock:"
+			    " %llu all locks,"
+			    " %llu trysuccess, %llu miss, notheldpct %llu,"
+			    " created %llu seconds ago at %s:%s:%d\n",
+			    __func__, __LINE__,
+			    leak->wdlist_total_lock_count,
+			    leak->wdlist_total_trylock_success,
+			    leak->wdlist_total_trylock_miss,
+			    notheldpct,
+			    NSEC2SEC(gethrtime() -
+			    leak->wdlist_mutex_created_time),
+			    leak->creation_file, leak->creation_function,
+			    leak->creation_line);
+		}
+	}
+
+	lck_mtx_lock((lck_mtx_t *)&mutex_list_mtx);
+	list_remove(&mutex_list, leak);
+	mp->leak = NULL;
+	lck_mtx_unlock((lck_mtx_t *)&mutex_list_mtx);
+	IOFreeType(leak, struct leak);
 #endif
 }
 
-
-
 #ifdef SPL_DEBUG_MUTEX
 void
-spl_mutex_enter(kmutex_t *mp, const char *file, int line)
+spl_mutex_enter(kmutex_t *mp, const char *file, const char *func,
+    const int line)
 #else
 void
 spl_mutex_enter(kmutex_t *mp)
 #endif
 {
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, ==, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
 #endif
-
-    if (mp->m_owner == current_thread())
-		panic("mutex_enter: locking against myself!");
 
 #ifdef DEBUG
-	if (*((uint64_t *)mp) == 0xdeadbeefdeadbeef) {
-		panic("SPL: mutex_enter");
+	if (unlikely(*((uint64_t *)mp) == 0xdeadbeefdeadbeef)) {
+		panic("SPL: mutex_enter deadbeef");
+		__builtin_unreachable();
 	}
 #endif
+
+	if (atomic_load_nonatomic(&mp->m_owner) == current_thread()) {
+		panic("mutex_enter: locking against myself!");
+		__builtin_unreachable();
+	}
 
 	atomic_inc_64(&mp->m_waiters);
 	spl_data_barrier();
 	lck_mtx_lock((lck_mtx_t *)&mp->m_lock);
 	spl_data_barrier();
 	atomic_dec_64(&mp->m_waiters);
-	mp->m_owner = current_thread();
+	atomic_store_nonatomic(&mp->m_owner, current_thread());
 
 #ifdef SPL_DEBUG_MUTEX
-	if (mp->leak) {
+	if (likely(mp->leak)) {
+		/*
+		 * We have the lock here, so our leak structure will not be
+		 * interfered with by other mutex_* functions operating on
+		 * this lock, except for the periodic spl_wdlist_check()
+		 * thread (see below) or a mutex_tryenter() (which will fail)
+		 */
 		struct leak *leak = (struct leak *)mp->leak;
 		leak->wdlist_locktime = gethrestime_sec();
-		strlcpy(leak->wdlist_file, file, sizeof (leak->wdlist_file));
-		leak->wdlist_line = line;
+		strlcpy(leak->location_file,
+		    file, sizeof (leak->location_file));
+		strlcpy(leak->location_function,
+		    func, sizeof (leak->location_function));
+		leak->location_line = line;
+		leak->wdlist_total_lock_count++;
+		/*
+		 * We allow a possible inaccuracy here by not
+		 * doing an atomic_inc_32() for the period lock.
+		 * The race can only be between this current thread
+		 * right here, and the spl_wdlist_check() periodic
+		 * read-modify-write.
+		 *
+		 * That RMW is done by an atomic_swap_32()
+		 * which uses SEQ_CST on Mac platforms,
+		 * which should order that read&zero against this
+		 * increment. In particular, the increment here shouldn't
+		 * be here_read_large_old_value_from_memory__to_register,
+		 * here_increment_register,
+		 * periodic_thread_sets_old_value_to_zero,
+		 * here_write_large_value_from_register_to_memory,
+		 * but it is technically possible (the race window is
+		 * very narrow!).
+		 *
+		 * The result would only be a (potential!) spurious printf
+		 * about a hot lock from the periodic thread at its next run,
+		 * and so the cost of a SEQ_CST atomic increment here is
+		 * not justified.
+		 */
+		leak->wdlist_period_lock_count++;
+	} else {
+		panic("SPL: %s:%d: where is my leak data?"
+		    " possible compilation mismatch", __func__, __LINE__);
+		__builtin_unreachable();
 	}
 #endif
 
@@ -372,29 +599,37 @@ void
 spl_mutex_exit(kmutex_t *mp)
 {
 #ifdef DEBUG
-	if (*((uint64_t *)mp) == 0xdeadbeefdeadbeef) {
-		panic("SPL: mutex_exit");
+	if (unlikely(*((uint64_t *)mp) == 0xdeadbeefdeadbeef)) {
+		panic("SPL: mutex_exit deadbeef");
+		__builtin_unreachable();
 	}
 #endif
 
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, ==, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
 #endif
 
 #ifdef SPL_DEBUG_MUTEX
-	if (mp->leak) {
+	if (likely(mp->leak)) {
 		struct leak *leak = (struct leak *)mp->leak;
 		uint64_t locktime = leak->wdlist_locktime;
 		uint64_t noe = gethrestime_sec();
 		if ((locktime > 0) && (noe > locktime) &&
 		    noe - locktime >= SPL_MUTEX_WATCHDOG_TIMEOUT) {
 			printf("SPL: mutex (%p) finally released after %llus "
-			    "by '%s':%llu\n", leak, noe - leak->wdlist_locktime,
-			    leak->wdlist_file, leak->wdlist_line);
+			    "was held by %s:'%s':%d\n",
+			    leak, noe - leak->wdlist_locktime,
+			    leak->location_file, leak->location_function,
+			    leak->location_line);
 		}
 		leak->wdlist_locktime = 0;
-		leak->wdlist_file[0] = 0;
-		leak->wdlist_line = 0;
+		leak->location_file[0] = 0;
+		leak->location_function[0] = 0;
+		leak->location_line = 0;
+	} else {
+		panic("SPL: %s:%d: where is my leak data?",
+		    __func__, __LINE__);
+		__builtin_unreachable();
 	}
 #endif
 	mp->m_owner = NULL;
@@ -403,12 +638,17 @@ spl_mutex_exit(kmutex_t *mp)
 }
 
 int
+#ifdef SPL_DEBUG_MUTEX
+spl_mutex_tryenter(kmutex_t *mp, const char *file, const char *func,
+    const int line)
+#else
 spl_mutex_tryenter(kmutex_t *mp)
+#endif
 {
 	int held;
 
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, ==, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
 #endif
 
 	atomic_inc_64(&mp->m_waiters);
@@ -447,18 +687,49 @@ spl_mutex_tryenter(kmutex_t *mp)
 		spl_data_barrier();
 	atomic_dec_64(&mp->m_waiters);
 	if (held) {
-		mp->m_owner = current_thread();
-
+		atomic_store_nonatomic(&mp->m_owner, current_thread());
 #ifdef SPL_DEBUG_MUTEX
-	if (mp->leak) {
-		struct leak *leak = (struct leak *)mp->leak;
-		leak->wdlist_locktime = gethrestime_sec();
-		strlcpy(leak->wdlist_file, "tryenter",
-		    sizeof (leak->wdlist_file));
-		leak->wdlist_line = 123;
-	}
-#endif
+		if (likely(mp->leak)) {
+			/*
+			 * see block comment in mutex_enter()'s
+			 * SPL_DEBUG_MUTEX section, and below.
+			 */
+			struct leak *leak = (struct leak *)mp->leak;
+			leak->wdlist_locktime = gethrestime_sec();
+			leak->wdlist_total_trylock_success++;
+			leak->wdlist_total_lock_count++;
+			leak->wdlist_period_lock_count++;
+			strlcpy(leak->location_file, file,
+			    SPL_DEBUG_MUTEX_MAXCHAR);
+			strlcpy(leak->location_function, func,
+			    SPL_DEBUG_MUTEX_MAXCHAR);
+			leak->location_line = line;
+		} else {
+			panic("SPL: %s:%d: where is my leak data?",
+			    __func__, __LINE__);
+			__builtin_unreachable();
+		}
 
+	} else {
+		/*
+		 * We are not protected by the lock here, so our
+		 * read-modify-writes must be done atomically, since in the
+		 * periodic spl_wdlist_check() thread these memory locations
+		 * may also have a racing ("simultaneous") RMW.  Here we
+		 * avoid the periodic thread potentially not seeing the
+		 * trylock miss that would just go over the threshold for
+		 * a diagnostic printf.
+		 *
+		 * The xnu code below lck_mtx_try_lock() for a miss is
+		 * substantially more expensive than the cost of these atomic
+		 * increments, so we shouldn't be doing mutex_trylock() in
+		 * a tight loop anyway.
+		 */
+		VERIFY3P(mp->leak, !=, NULL);
+		struct leak *leak = (struct leak *)mp->leak;
+		atomic_inc_64(&leak->wdlist_total_trylock_miss);
+		atomic_inc_32(&leak->wdlist_period_trylock_miss);
+#endif
 	}
 	return (held);
 }
@@ -466,11 +737,57 @@ spl_mutex_tryenter(kmutex_t *mp)
 int
 spl_mutex_owned(kmutex_t *mp)
 {
-	return (mp->m_owner == current_thread());
+	return (atomic_load_nonatomic(&mp->m_owner) == current_thread());
 }
 
 struct kthread *
 spl_mutex_owner(kmutex_t *mp)
 {
-	return (mp->m_owner);
+	return (atomic_load_nonatomic(&mp->m_owner));
 }
+
+#ifdef SPL_DEBUG_MUTEX
+void
+spl_dbg_mutex_destroy(kmutex_t *mp, const char *file,
+    const char *func, const int line)
+{
+
+	extern struct thread *spl_mutex_owner(kmutex_t *);
+	extern int spl_mutex_owned(kmutex_t *);
+	extern void spl_mutex_destroy(kmutex_t *);
+
+	membar_consumer();
+	VERIFY3P(mp, !=, NULL);
+	struct thread *o = spl_mutex_owner(mp);
+	if (o != NULL) {
+		VERIFY3P(mp->leak, !=, NULL);
+		struct leak *leak = (struct leak *)mp->leak;
+		uint64_t noe = gethrestime_sec();
+		if (!spl_mutex_owned(mp)) {
+			panic("%s: mutex has other owner %p"
+			    " destroy call at %s() in %s line %d,"
+			    " last mutex_enter in %s:%s:%d"
+			    " %llus ago"
+			    "\n",
+			    __func__, o, func, file, line,
+			    leak->location_file,
+			    leak->location_function,
+			    leak->location_line,
+			    noe - leak->wdlist_locktime);
+		} else {
+			panic("%s: mutex %p is owned by"
+			    " current thread"
+			    " from %s() in %s line %d"
+			    " last mutex_enter in %s:%s:%d"
+			    " %llus ago"
+			    "\n",
+			    __func__, o, func, file, line,
+			    leak->location_file,
+			    leak->location_function,
+			    leak->location_line,
+			    noe - leak->wdlist_locktime);
+		}
+	}
+	spl_mutex_destroy(mp);
+}
+#endif
