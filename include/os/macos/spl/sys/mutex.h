@@ -126,14 +126,38 @@ void spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc);
 #ifdef SPL_DEBUG_MUTEX
 #define	mutex_enter(X) spl_mutex_enter((X), __FILE__, __LINE__)
 void spl_mutex_enter(kmutex_t *mp, const char *file, int line);
+inline void
+dbg_mutex_destroy(kmutex_t *mp, const char *func,
+    const char *file, int line) {
+
+	extern struct thread *spl_mutex_owner(kmutex_t *);
+	extern int spl_mutex_owned(kmutex_t *);
+	extern void spl_mutex_destroy(kmutex_t *);
+
+	membar_consumer();
+	struct thread *o = spl_mutex_owner(mp);
+	if (o != NULL) {
+		if (!spl_mutex_owned(mp))
+			panic("%s: mutex has other owner %p"
+			    " from %s() in %s line %d\n",
+			    __func__, o, func, file, line);
+		else
+			panic("%s: mutex %p is owned by"
+			    " current thread"
+			    " from %s() in %s line %d\n",
+			    __func__, o, func, file, line);
+	}
+	spl_mutex_destroy(mp);
+}
+#define mutex_destroy(X) dbg_mutex_destroy(X, __func__, __FILE__, __LINE__)
 #else
 #define	mutex_enter spl_mutex_enter
 void spl_mutex_enter(kmutex_t *mp);
+#define mutex_destroy spl_mutex_destroy
 #endif
 
 #define	mutex_enter_nested(A, B)	mutex_enter(A)
 
-#define	mutex_destroy spl_mutex_destroy
 #define	mutex_exit spl_mutex_exit
 #define	mutex_tryenter spl_mutex_tryenter
 #define	mutex_owned spl_mutex_owned
