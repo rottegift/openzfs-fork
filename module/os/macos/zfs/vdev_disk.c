@@ -43,7 +43,6 @@
  * Virtual device vector for disks.
  */
 
-
 static taskq_t *vdev_disk_taskq_asyncr;
 static taskq_t *vdev_disk_taskq_asyncw;
 static taskq_t *vdev_disk_taskq_default;
@@ -855,6 +854,7 @@ vdev_disk_init(void)
 void
 vdev_disk_fini(void)
 {
+	taskq_destroy(vdev_disk_taskq_default);
 	taskq_destroy(vdev_disk_taskq_scrub);
 	taskq_destroy(vdev_disk_taskq_asyncr);
 	taskq_destroy(vdev_disk_taskq_asyncw);
