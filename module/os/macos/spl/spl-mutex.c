@@ -431,3 +431,47 @@ spl_mutex_owner(kmutex_t *mp)
 {
 	return (mp->m_owner);
 }
+
+#ifdef SPL_DEBUG_MUTEX
+void
+spl_dbg_mutex_destroy(kmutex_t *mp, const char *func,
+    const char *file, const int line)
+{
+
+	extern struct thread *spl_mutex_owner(kmutex_t *);
+	extern int spl_mutex_owned(kmutex_t *);
+	extern void spl_mutex_destroy(kmutex_t *);
+
+	membar_consumer();
+	VERIFY3P(mp, !=, NULL);
+	struct thread *o = spl_mutex_owner(mp);
+	if (o != NULL) {
+		VERIFY3P(mp->leak, !=, NULL);
+		struct leak *leak = (struct leak *)mp->leak;
+		uint64_t noe = gethrestime_sec();
+		if (!spl_mutex_owned(mp)) {
+			panic("%s: mutex has other owner %p"
+			    " destroy call at %s() in %s line %d,"
+			    " last mutex_enter in %s line %llu"
+			    " %llus ago"
+			    "\n",
+			    __func__, o, func, file, line,
+			    leak->wdlist_file,
+			    leak->wdlist_line,
+			    noe - leak->wdlist_locktime);
+		} else {
+			panic("%s: mutex %p is owned by"
+			    " current thread"
+			    " from %s() in %s line %d"
+			    " last mutex_enter in %s line %llu"
+			    " %llus ago"
+			    "\n",
+			    __func__, o, func, file, line,
+			    leak->wdlist_file,
+			    leak->wdlist_line,
+			    noe - leak->wdlist_locktime);
+		}
+	}
+	spl_mutex_destroy(mp);
+}
+#endif
