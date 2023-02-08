@@ -680,6 +680,31 @@ dnode_destroy(dnode_t *dn)
 	dn->dn_id_flags = 0;
 
 	dmu_zfetch_fini(&dn->dn_zfetch);
+// smd debugging XXX
+	ASSERT(!MUTEX_HELD(&dn->dn_mtx));
+	extern int spl_mutex_owned(kmutex_t *);
+	extern struct thread *spl_mutex_owner(kmutex_t *);
+	struct thread *o = spl_mutex_owner(&dn->dn_mtx);
+	if (o != NULL) {
+		if (!spl_mutex_owned(&dn->dn_mtx)) {
+			printf("SPL ZFS %s:%s:%d: smd:"
+			    " dn_mtx held by other thread"
+			    " so doing an mutex_enter() + exit\n",
+			    __FILE__, __func__, __LINE__);
+			mutex_enter(&dn->dn_mtx);
+			kpreempt(KPREEMPT_SYNC);
+			mutex_exit(&dn->dn_mtx);
+		} else {
+			printf("SPL ZFS %s:%s:%d: smd:"
+			    " anomaly: lock held by me or now"
+			    " not held.  Trying mutex_enter() + exit\n",
+			    __FILE__, __func__, __LINE__);
+			mutex_enter(&dn->dn_mtx);
+			kpreempt(KPREEMPT_SYNC);
+			mutex_exit(&dn->dn_mtx);
+		}
+	}
+// end
 	kmem_cache_free(dnode_cache, dn);
 	arc_space_return(sizeof (dnode_t), ARC_SPACE_DNODE);
 
