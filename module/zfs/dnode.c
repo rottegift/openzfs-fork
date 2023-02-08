@@ -23,7 +23,6 @@
  * Copyright (c) 2012, 2020 by Delphix. All rights reserved.
  * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
  */
-
 #include <sys/zfs_context.h>
 #include <sys/dbuf.h>
 #include <sys/dnode.h>
@@ -190,6 +189,29 @@ dnode_dest(void *arg, void *unused)
 	dnode_t *dn = arg;
 
 	rw_destroy(&dn->dn_struct_rwlock);
+	for (unsigned int i = 0; ; i++) {
+		if (mutex_tryenter(&dn->dn_mtx)) {
+			mutex_exit(&dn->dn_mtx);
+			if (i > 0) {
+				printf("ZFS SPL %s:%s:%d "
+				    "mutex_tryenter needed %u "
+				    "iterations\n",
+				    __FILE__, __func__, __LINE__,
+				    i);
+			}
+			break;
+		} else {
+			if ((i % 1000) == 0) {
+				printf("ZFS SPL %s:%s:%d "
+				    "mutex_tryenter still iterating "
+				    "count %u\n",
+				    __FILE__, __func__, __LINE__,
+				    i);
+			}
+			extern void IOSleepWithLeeway(unsigned, unsigned);
+			IOSleepWithLeeway(2, 1);
+		}
+	}
 	mutex_destroy(&dn->dn_mtx);
 	mutex_destroy(&dn->dn_dbufs_mtx);
 	cv_destroy(&dn->dn_notxholds);
@@ -688,6 +710,31 @@ dnode_destroy(dnode_t *dn)
 	dn->dn_id_flags = 0;
 
 	dmu_zfetch_fini(&dn->dn_zfetch);
+// smd debugging XXX
+	ASSERT(!MUTEX_HELD(&dn->dn_mtx));
+	extern int spl_mutex_owned(kmutex_t *);
+	extern struct thread *spl_mutex_owner(kmutex_t *);
+	struct thread *o = spl_mutex_owner(&dn->dn_mtx);
+	if (o != NULL) {
+		if (!spl_mutex_owned(&dn->dn_mtx)) {
+			printf("SPL ZFS %s:%s:%d: smd:"
+			    " dn_mtx held by other thread"
+			    " so doing an mutex_enter() + exit\n",
+			    __FILE__, __func__, __LINE__);
+			mutex_enter(&dn->dn_mtx);
+			kpreempt(KPREEMPT_SYNC);
+			mutex_exit(&dn->dn_mtx);
+		} else {
+			printf("SPL ZFS %s:%s:%d: smd:"
+			    " anomaly: lock held by me or now"
+			    " not held.  Trying mutex_enter() + exit\n",
+			    __FILE__, __func__, __LINE__);
+			mutex_enter(&dn->dn_mtx);
+			kpreempt(KPREEMPT_SYNC);
+			mutex_exit(&dn->dn_mtx);
+		}
+	}
+// end
 	kmem_cache_free(dnode_cache, dn);
 	arc_space_return(sizeof (dnode_t), ARC_SPACE_DNODE);
 
@@ -1303,9 +1350,10 @@ dnode_special_close(dnode_handle_t *dnh)
 	if (zfs_refcount_count(&dn->dn_holds) > 0)
 		cv_wait(&dn->dn_nodnholds, &dn->dn_mtx);
 	mutex_exit(&dn->dn_mtx);
-	ASSERT3U(zfs_refcount_count(&dn->dn_holds), ==, 0);
-
-	ASSERT(dn->dn_dbuf == NULL ||
+	// XXX: smd debug ASSERT->VERIFY here
+	VERIFY3U(zfs_refcount_count(&dn->dn_holds), ==, 0);
+	// XXX: smd debug ASSERT->VERIFY here
+	VERIFY(dn->dn_dbuf == NULL ||
 	    dmu_buf_get_user(&dn->dn_dbuf->db) == NULL);
 	zrl_add(&dnh->dnh_zrlock);
 	dnode_destroy(dn); /* implicit zrl_remove() */
@@ -1756,8 +1804,20 @@ dnode_rele_and_unlock(dnode_t *dn, const void *tag, boolean_t evicting)
 	 * other direct or indirect hold on the dnode must first drop the dnode
 	 * handle.
 	 */
+
+	// XXX: smd debug: strengthen this
 #ifdef ZFS_DEBUG
 	ASSERT(refs > 0 || dnh->dnh_zrlock.zr_owner != curthread);
+#endif
+#ifdef DEBUG
+	if (!(refs > 0 || dnh->dnh_zrlock.zr_owner != curthread)) {
+		panic("SPL ZFS: smd: refs should be 0 (refs == %llu)"
+		    " or owner should be someone else (it's %s)\n",
+		    refs,
+		    (dnh->dnh_zrlock.zr_owner != curthread)
+		    ? "someone else"
+		    : "ME");
+	}
 #endif
 
 	/* NOTE: the DNODE_DNODE does not have a dn_dbuf */
