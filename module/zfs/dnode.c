@@ -1314,9 +1314,10 @@ dnode_special_close(dnode_handle_t *dnh)
 	if (zfs_refcount_count(&dn->dn_holds) > 0)
 		cv_wait(&dn->dn_nodnholds, &dn->dn_mtx);
 	mutex_exit(&dn->dn_mtx);
-	ASSERT3U(zfs_refcount_count(&dn->dn_holds), ==, 0);
-
-	ASSERT(dn->dn_dbuf == NULL ||
+	// XXX: smd debug ASSERT->VERIFY here
+	VERIFY3U(zfs_refcount_count(&dn->dn_holds), ==, 0);
+	// XXX: smd debug ASSERT->VERIFY here
+	VERIFY(dn->dn_dbuf == NULL ||
 	    dmu_buf_get_user(&dn->dn_dbuf->db) == NULL);
 	zrl_add(&dnh->dnh_zrlock);
 	dnode_destroy(dn); /* implicit zrl_remove() */
@@ -1759,9 +1760,19 @@ dnode_rele_and_unlock(dnode_t *dn, const void *tag, boolean_t evicting)
 	 * other direct or indirect hold on the dnode must first drop the dnode
 	 * handle.
 	 */
+
+	// XXX: smd debug: strengthen this
 #ifdef ZFS_DEBUG
 	ASSERT(refs > 0 || dnh->dnh_zrlock.zr_owner != curthread);
 #endif
+	if (!(refs > 0 || dnh->dnh_zrlock.zr_owner != curthread)) {
+		panic("SPL ZFS: smd: refs should be 0 (refs == %ld)"
+		    " or owner should be someone else (it's %s)\n",
+		    refs,
+		    (dnh->dnh_zrlock.zr_owner != curthread)
+		    ? "someone else"
+		    : "ME");
+	}
 
 	/* NOTE: the DNODE_DNODE does not have a dn_dbuf */
 	if (refs == 0 && db != NULL) {
