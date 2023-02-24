@@ -182,6 +182,29 @@ dnode_dest(void *arg, void *unused)
 	dnode_t *dn = arg;
 
 	rw_destroy(&dn->dn_struct_rwlock);
+	for (unsigned int i = 0; ; i++) {
+		if (mutex_tryenter(&dn->dn_mtx)) {
+			mutex_exit(&dn->dn_mtx);
+			if (i > 0) {
+				printf("ZFS SPL %s:%s:%d "
+				    "mutex_tryenter needed %u "
+				    "iterations\n",
+				    __FILE__, __func__, __LINE__,
+				    i);
+			}
+			break;
+		} else {
+			if ((i % 1000) == 0) {
+				printf("ZFS SPL %s:%s:%d "
+				    "mutex_tryenter still iterating "
+				    "count %u\n",
+				    __FILE__, __func__, __LINE__,
+				    i);
+			}
+			extern void IOSleep(unsigned milliseconds);
+			IOSleep(1);
+		}
+	}
 	mutex_destroy(&dn->dn_mtx);
 	mutex_destroy(&dn->dn_dbufs_mtx);
 	cv_destroy(&dn->dn_notxholds);
