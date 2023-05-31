@@ -424,7 +424,14 @@ spl_cache_purgevfs_impl(struct vnode *vp, void *arg)
 {
 	cache_purge(vp);
 	cache_purge_negatives(vp);
+
 	return (VNODE_RETURNED);
+#if 0
+	if (system_taskq == NULL)
+		return (VNODE_RETURNED);
+	vn_rele_async(vp, system_taskq);
+	return (VNODE_CLAIMED);
+#endif
 }
 
 /*
@@ -432,9 +439,10 @@ spl_cache_purgevfs_impl(struct vnode *vp, void *arg)
  * as close as possible
  */
 void
-spl_cache_purgevfs(mount_t mp)
+spl_cache_purgevfs(mount_t mp, boolean_t reload)
 {
-	(void) vnode_iterate(mp, VNODE_RELOAD, spl_cache_purgevfs_impl, NULL);
+	(void) vnode_iterate(mp, reload ? VNODE_RELOAD : 0,
+	    spl_cache_purgevfs_impl, NULL);
 }
 
 /* Gross hacks - find solutions */
