@@ -765,7 +765,8 @@ handle_remove_locked(struct ldi_handle *lhp)
 	ASSERT(MUTEX_HELD(&ldi_handle_hash_lock[index]));
 
 	/* Remove from list, update handle count */
-	list_remove(&ldi_handle_hash_list[index], lhp);
+	if (list_link_active(&lhp->lh_node))
+		list_remove(&ldi_handle_hash_list[index], lhp);
 	OSDecrementAtomic(&ldi_handle_hash_count);
 }
 
