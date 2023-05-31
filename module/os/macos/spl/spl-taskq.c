@@ -968,6 +968,16 @@ taskq_dispatch_delay(taskq_t *tq, task_func_t func, void *arg, uint_t tqflags,
 	return ((taskqid_t)tqdnode);
 }
 
+/*
+ * Cancel an already dispatched task given the task id.  Still pending tasks
+ * will be immediately canceled, and if the task is active the function will
+ * block until it completes.  Preallocated tasks which are canceled must be
+ * freed by the caller.
+ *
+ * This function returns "0" if it definitely managed to prevent a taskq
+ * from running (so caller can then clean up instead), and EBUSY etc
+ * if it had to wait for it to finish. (Or ENOENT for unknown id)
+ */
 int
 taskq_cancel_id(taskq_t *tq, taskqid_t id)
 {
@@ -998,13 +1008,25 @@ taskq_cancel_id(taskq_t *tq, taskqid_t id)
 
 				kmem_free(tqdnode, sizeof (tqdelay_t));
 
-				return (1);
+				/* Stopped it from running */
+				return (0);
 
 			} // task == tqdnode
 		} // for
 		mutex_exit(&tqd_delay_lock);
 	} // task != NULL
-	return (0);
+
+	/*
+	 * Might have just started it -
+	 * but we don't know for *sure*, but presumably
+	 * it has an "id" because it called dispatch_delay().
+	 */
+	if (id != NULL) {
+		taskq_wait_id(tq, id);
+		return (EBUSY); /* EBUSY ? how can we *know* it ran? */
+	}
+
+	return (ENOENT);
 }
 
 void
