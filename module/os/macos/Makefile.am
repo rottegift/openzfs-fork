@@ -208,7 +208,6 @@ zfs_common_SRCS = \
 	%D%/../../zfs/uberblock.c \
 	%D%/../../zfs/unique.c \
 	%D%/../../zfs/vdev.c \
-	%D%/../../zfs/vdev_cache.c \
 	%D%/../../zfs/vdev_draid.c \
 	%D%/../../zfs/vdev_draid_rand.c \
 	%D%/../../zfs/vdev_indirect.c \
