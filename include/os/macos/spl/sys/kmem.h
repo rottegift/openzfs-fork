@@ -66,9 +66,7 @@ extern uint64_t physmem;
 #define	kmem_zalloc(size, kmflags)	zfs_kmem_zalloc((size), (kmflags))
 #define	kmem_free(buf, size)		zfs_kmem_free((buf), (size))
 
-__attribute__((malloc, alloc_size(1)))
 void *zfs_kmem_alloc(size_t size, int kmflags);
-__attribute__((malloc, alloc_size(1)))
 void *zfs_kmem_zalloc(size_t size, int kmflags);
 void zfs_kmem_free(const void *buf, size_t size);
 
@@ -124,7 +122,6 @@ kmem_cache_t *kmem_cache_create(char *name, size_t bufsize, size_t align,
     void (*reclaim)(void *),
     void *_private, vmem_t *vmp, int cflags);
 void kmem_cache_destroy(kmem_cache_t *cache);
-__attribute__((malloc))
 void *kmem_cache_alloc(kmem_cache_t *cache, int flags);
 void kmem_cache_free(kmem_cache_t *cache, const void *buf);
 void kmem_cache_free_to_slab(kmem_cache_t *cache, void *buf);
@@ -139,12 +136,9 @@ int kmem_debugging(void);
 void kmem_cache_set_move(kmem_cache_t *,
     kmem_cbrc_t (*)(void *, void *, size_t, void *));
 
-
-__attribute__((format(printf, 1, 2)))
 char *kmem_asprintf(const char *fmt, ...);
 extern char *kmem_strdup(const char *str);
 extern void kmem_strfree(char *str);
-__attribute__((format(printf, 1, 0)))
 char *kmem_vasprintf(const char *fmt, va_list ap);
 char *kmem_strstr(const char *in, const char *str);
 void strident_canon(char *s, size_t n);
