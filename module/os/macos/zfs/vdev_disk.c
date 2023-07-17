@@ -531,10 +531,15 @@ vdev_disk_io_strategy(void *arg)
 		break;
 
 	case ZIO_TYPE_READ:
-		if (zio->io_priority == ZIO_PRIORITY_SYNC_READ)
+		if (zio->io_priority == ZIO_PRIORITY_SYNC_READ) {
 			flags = B_READ;
-		else
+		}else {
 			flags = B_READ | B_ASYNC;
+		}
+
+		if (zio->io_priority == ZIO_PRIORITY_SCRUB) {
+			flags = B_READ | B_ASYNC | B_THROTTLED_IO;
+		}
 
 		bp->b_un.b_addr =
 		    abd_borrow_buf(zio->io_abd, zio->io_size);
