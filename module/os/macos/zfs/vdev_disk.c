@@ -534,7 +534,7 @@ vdev_disk_io_strategy(void *arg)
 		if (zio->io_priority == ZIO_PRIORITY_SYNC_READ)
 			flags = B_READ;
 		else if (zio->io_priority == ZIO_PRIORITY_SCRUB)
-			flags = B_READ | B_NOCACHE | B_ASYNC;
+			flags = B_READ | B_THROTTLED_IO | B_ASYNC;
 		else
 			flags = B_READ | B_ASYNC;
 

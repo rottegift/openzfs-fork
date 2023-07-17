@@ -1334,25 +1334,19 @@ buf_strategy_iokit(ldi_buf_t *lbp, struct ldi_handle *lhp)
 
 #if !defined(MAC_OS_X_VERSION_10_9) || \
   (MAC_OS_X_VERSION_MIN_REQUIRED > MAC_OS_X_VERSION_10_9)
-	/* Priority of I/O */
-	if (lbp->b_flags & B_THROTTLED_IO) {
-		lbp->b_flags &= ~B_THROTTLED_IO;
-		ioattr.priority = kIOStoragePriorityBackground;
-		if (lbp->b_flags & B_WRITE)
-			ioattr.priority--;
-	} else if ((lbp->b_flags & B_ASYNC) == 0 ||
-	    (lbp->b_flags & B_WRITE)) {
-		/* elevate SYNC and WRITE I/Os */
-		ioattr.priority = kIOStoragePriorityDefault - 1;
-	} else if ((lbp->b_flags & (B_ASYNC | B_READ | B_NOCACHE)) ==
-	    (B_ASYNC | B_READ | B_NOCACHE)) {
-		/* this is a scrub */
-		ioattr.priority = kIOStoragePriorityLow;
-		lbp->b_flags &= ~B_NOCACHE;
-	} else {
-		/* normal priority */
+	/* Priority of I/O - lower is higher */
+
+	if ((lbp->b_flags & B_THROTTLED_IO) == 0)
+		ioattr.priority = kIOStoragePriorityLow + 2;
+	else
 		ioattr.priority = kIOStoragePriorityDefault;
-	}
+
+	if ((lbp->b_flags & B_ASYNC) == 0)
+		ioattr.priority--;
+
+	if (lbp->b_flags & B_WRITE)
+		ioattr.priority--;
+
 #endif
 
 	/*
