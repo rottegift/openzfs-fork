@@ -48,6 +48,7 @@
 static utsname_t utsname_static = { { 0 } };
 
 unsigned int max_ncpus = 0;
+unsigned int boot_ncpus = 0;
 uint64_t  total_memory = 0;
 uint64_t  real_total_memory = 0;
 
@@ -444,6 +445,13 @@ spl_start(kmod_info_t *ki, void *d)
 
 	sysctlbyname("hw.logicalcpu_max", &max_ncpus, &len, NULL, 0);
 	if (!max_ncpus) max_ncpus = 1;
+
+	boot_ncpus = max_ncpus;
+
+#if defined(__arm64__)
+	boot_ncpus = max_ncpus - 4; // smd placeholder
+#endif
+
 
 	/*
 	 * Setting the total memory to physmem * 50% here, since kmem is
