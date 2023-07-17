@@ -443,53 +443,7 @@ spl_start(kmod_info_t *ki, void *d)
 	}
 
 	sysctlbyname("hw.logicalcpu_max", &max_ncpus, &len, NULL, 0);
-
-#if !defined(__arm64__)
 	if (!max_ncpus) max_ncpus = 1;
-#else
-	/*
-	 * We should not count E cores here, because we end up overloading the
-	 * system during high-CPU activity like a scrub on a many-vdev SSD
-	 * pool.
-	 *
-	 * Ideally we would look at hw.perflevel[01...n?].logicalcpu_max
-	 * where perflevel0 are P cores and perflevel1 are E cores
-	 * as of summer 2023 / macOS 13 (Ventura).
-	 *
-	 * However, as that's not feasible, reduce by four.
-	 * There are more E-cores on the larger M2 machines,
-	 * so we may want to reduce by more than four for those,
-	 * using some compile-time tricks to set the value here
-	 * during runtime; for now it's a simple heuristic on
-	 * core count that would need revisiting for new h/w
-	 * that has larger numbers of E-cores.
-	 *
-	 * mac pro / m2 mac studio can have 24 = 16+8 cores
-	 *          (we care about the 8 E-core case; there
-	 *          doesn't seem to be any model where there
-	 *          are more than 4-Ecores but less than
-	 *          24 cores total)
-	 *
-	 *          m2 mac studio can have 12 = 8+4 cores
-	 * m2 laptops have 8 = 4+4, 10 = 6+4 or 12 = 8+4
-	 * m1 probably always has 4 e-cores, certainly true
-	 *    on original mac mini + mac studio ultra
-	 */
-
-	if (max_ncpus < 4)
-		max_ncpus = 4;
-
-	if (max_ncpus >= 24)
-		max_ncpus -= 4;
-
-	if (max_ncpus > 4)
-		max_ncpus -= 4;
-
-#endif
-
-	/* sanity check */
-	VERIFY3U(max_ncpus, >, 0);
-	VERIFY3U(max_ncpus, <, 256);
 
 	/*
 	 * Setting the total memory to physmem * 50% here, since kmem is
