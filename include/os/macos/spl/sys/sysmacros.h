@@ -89,7 +89,7 @@ extern "C" {
 #define	is_system_labeled()		0
 
 extern unsigned int max_ncpus;
-#define	boot_ncpus max_ncpus
+extern unsigned int boot_ncpus;
 
 #ifndef RLIM64_INFINITY
 #define	RLIM64_INFINITY			(~0ULL)

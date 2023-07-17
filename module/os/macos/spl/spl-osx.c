@@ -443,7 +443,57 @@ spl_start(kmod_info_t *ki, void *d)
 	}
 
 	sysctlbyname("hw.logicalcpu_max", &max_ncpus, &len, NULL, 0);
+
+#if !defined(__arm64__)
 	if (!max_ncpus) max_ncpus = 1;
+
+	boot_ncpus = max_ncpus;
+#else
+
+	/*
+	 * Apple Silicon has E-cores and P-cores
+	 *
+	 * the sysctl above set max_ncpus to count both;
+	 * it is awkward and unsafe to change that value
+	 *
+	 * boot_ncpus is allowed to be smaller than
+	 * max_ncpus, and is used for scaling taskqs
+	 * and in ZTI_SCALE
+	 *
+	 * boot_ncpus should be max_ncpus minus E-cores,
+	 * for performance reasons.
+	 */
+
+	unsigned int n_perflevels = 0;
+
+	sysctlbyname("hw.nperflevels", &n_perflevels, &len, NULL, 0);
+
+        // error if not 2?
+
+	unsigned int n_pcores = 0;
+
+	sysctlbyname("hw.perflevel0.logicalcpu_max", &n_pcores, &len, NULL, 0);
+
+	unsigned int n_ecores = 0;
+
+	sysctlbyname("hw.perflevel1.logicalcpu_max", &n_pcores, &len, NULL, 0);
+
+	printf("ZFS SPL: %s:%d:%s: perflevels = %u, "
+	    "pcores = %u, ecores = $u, max_ncpus = %u\n",
+	    __FILE__, __LINE__, __func__,
+	    n_perflevels, n_pcores, n_ecores, max_ncpus);
+
+	boot_ncpus = n_pcores;
+
+	if (boot_ncpus >= max_ncpus)
+		boot_ncpus = max_ncpus - 4;
+
+	if (boot_ncpus < 4)
+		boot_ncpus = 4;
+
+	printf("ZFS SPL: %s:%d:%s: boot_ncpus = %u\n", boot_ncpus);
+
+#endif
 
 	/*
 	 * Setting the total memory to physmem * 50% here, since kmem is
