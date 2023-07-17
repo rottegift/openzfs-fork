@@ -533,6 +533,8 @@ vdev_disk_io_strategy(void *arg)
 	case ZIO_TYPE_READ:
 		if (zio->io_priority == ZIO_PRIORITY_SYNC_READ)
 			flags = B_READ;
+		else if (zio->io_priority == ZIO_PRIORITY_SCRUB)
+			flags = B_READ | B_NOCACHE | B_ASYNC;
 		else
 			flags = B_READ | B_ASYNC;
 

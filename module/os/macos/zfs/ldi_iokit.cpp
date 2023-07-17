@@ -1340,10 +1340,19 @@ buf_strategy_iokit(ldi_buf_t *lbp, struct ldi_handle *lhp)
 		ioattr.priority = kIOStoragePriorityBackground;
 		if (lbp->b_flags & B_WRITE)
 			ioattr.priority--;
-	} else if ((lbp->b_flags & B_ASYNC) == 0 || (lbp->b_flags & B_WRITE))
+	} else if ((lbp->b_flags & B_ASYNC) == 0 ||
+	    (lbp->b_flags & B_WRITE)) {
+		/* elevate SYNC and WRITE I/Os */
 		ioattr.priority = kIOStoragePriorityDefault - 1;
-	else
+	} else if ((lbp->b_flags & (B_ASYNC | B_READ | B_NOCACHE)) ==
+	    (B_ASYNC | B_READ | B_NOCACHE)) {
+		/* this is a scrub */
+		ioattr.priority = kIOStoragePriorityLow;
+		lbp->b_flags &= ~B_NOCACHE;
+	} else {
+		/* normal priority */
 		ioattr.priority = kIOStoragePriorityDefault;
+	}
 #endif
 
 	/*

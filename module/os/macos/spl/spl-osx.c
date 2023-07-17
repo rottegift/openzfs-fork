@@ -467,16 +467,19 @@ spl_start(kmod_info_t *ki, void *d)
 
 	unsigned int n_perflevels = 0;
 
+	len = sizeof (n_perflevels);
 	sysctlbyname("hw.nperflevels", &n_perflevels, &len, NULL, 0);
 
         // error if not 2?
 
 	unsigned int n_pcores = 0;
 
+	len = sizeof (n_pcores);
 	sysctlbyname("hw.perflevel0.logicalcpu_max", &n_pcores, &len, NULL, 0);
 
 	unsigned int n_ecores = 0;
 
+	len = sizeof (n_ecores);
 	sysctlbyname("hw.perflevel1.logicalcpu_max", &n_pcores, &len, NULL, 0);
 
 	printf("ZFS SPL: %s:%d:%s: perflevels = %u, "
