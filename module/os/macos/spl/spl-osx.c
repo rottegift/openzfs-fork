@@ -420,8 +420,7 @@ spl_start(kmod_info_t *ki, void *d)
 {
 	printf("SPL: loading\n");
 
-	int ncpus;
-	size_t len = sizeof (ncpus);
+	size_t len = 0;
 
 	/*
 	 * Boot load time is excessively early, so we have to wait
@@ -443,6 +442,7 @@ spl_start(kmod_info_t *ki, void *d)
 		delay(hz>>1);
 	}
 
+	len = sizeof (max_ncpus);
 	sysctlbyname("hw.logicalcpu_max", &max_ncpus, &len, NULL, 0);
 
 #if !defined(__arm64__)
@@ -480,7 +480,7 @@ spl_start(kmod_info_t *ki, void *d)
 	unsigned int n_ecores = 0;
 
 	len = sizeof (n_ecores);
-	sysctlbyname("hw.perflevel1.logicalcpu_max", &n_pcores, &len, NULL, 0);
+	sysctlbyname("hw.perflevel1.logicalcpu_max", &n_ecores, &len, NULL, 0);
 
 	printf("ZFS SPL: %s:%d:%s: perflevels = %u, "
 	    "pcores = %u, ecores = $u, max_ncpus = %u\n",
