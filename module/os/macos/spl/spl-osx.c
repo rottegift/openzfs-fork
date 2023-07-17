@@ -452,6 +452,8 @@ spl_start(kmod_info_t *ki, void *d)
 	boot_ncpus = max_ncpus - 4; // smd placeholder
 #endif
 
+	printf("ZFS SPL: %s:%d:%s max_ncpus %u boot_ncpus %u\n",
+	    __FILE__, __LINE__, __func__, max_ncpus, boot_ncpus);
 
 	/*
 	 * Setting the total memory to physmem * 50% here, since kmem is
