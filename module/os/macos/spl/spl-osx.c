@@ -48,6 +48,7 @@
 static utsname_t utsname_static = { { 0 } };
 
 unsigned int max_ncpus = 0;
+unsigned int boot_ncpus = 0;
 uint64_t  total_memory = 0;
 uint64_t  real_total_memory = 0;
 
