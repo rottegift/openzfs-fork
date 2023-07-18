@@ -456,9 +456,20 @@ spl_start(kmod_info_t *ki, void *d)
 	/* see change in spa.c */
 #endif
 
-
 	printf("ZFS SPL: %s:%d:%s max_ncpus %u boot_ncpus %u\n",
 	    __FILE__, __LINE__, __func__, max_ncpus, boot_ncpus);
+
+	extern uint_t _sysctl__tunable_zfs_zio_taskq_batch_tpq;
+	extern uint_t _sysctl__tunable_zfs_zio_taskq_batch_pct;
+	extern int _sysctl__tunable_zfs_sync_taskq_batch_pct;
+
+	printf("ZFS SPL: %s:%d:%s zio_task_batch_tpq %u, "
+	    "zfs_sync_taskq_batch_pct %u, "
+	    "zfs_sync_taskq_batch_pct %u\n",
+	    __FILE__, __LINE__, __func__,
+	    _sysctl__tunable_zfs_zio_taskq_batch_tpq,
+	    _sysctl__tunable_zfs_zio_taskq_batch_pct,
+	    _sysctl__tunable_zfs_sync_taskq_batch_pct);
 
 	/*
 	 * Setting the total memory to physmem * 50% here, since kmem is
