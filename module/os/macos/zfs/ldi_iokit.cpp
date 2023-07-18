@@ -1216,17 +1216,32 @@ ldi_iokit_io_intr(void *target, void *parameter,
 	if (actualByteCount == 0 ||
 	    actualByteCount != lbp->b_bcount ||
 	    status != kIOReturnSuccess) {
-		printf("%s %s %llx / %llx\n", __func__,
-		    "actualByteCount != lbp->b_bcount",
-		    actualByteCount, lbp->b_bcount);
+		printf("%s actualByteCOunt != lbp->b_count "
+		    "%llx / %llx, "
+		    "bufsize %llx lbkno %llx resid %llx "
+		    "flags %x err %x\n",
+		    __func__,
+		    actualByteCount, lbp->b_bcount,
+		    lbp->b_bufsize, lbp->b_lblkno, lbp->b_resid,
+		    lbp->b_flags, lbp->b_error);
 		if (ldi_zfs_handle) {
 			const char *s = ldi_zfs_handle->stringFromReturn(status);
-			printf("%s status %x, err %d, %s\n", __func__, status,
+			printf("%s have handle: status %x, status %d, %s, "
+			    "err %x, bufsize %llx lblkno %llx resid %llx "
+			    "flags %x\n",
+			    __func__, status,
 			    ldi_zfs_handle->errnoFromReturn(status),
-			    (s != NULL) ? s : "no stringFromReturn");
+			    (s != NULL) ? s : "no stringFromReturn",
+			    lbp->b_error, lbp->b_bufsize, lbp->b_lblkno,
+			    lbp->b_resid, lbp->b_flags);
 		} else {
-			printf("%s status %x, ldi_zfs_handle is NULL\n",
-			    __func__, status);
+			printf("%s status %x, ldi_zfs_handle is NULL, "
+			    "err %x, bufsize %llx lblkno %llx resid %llx "
+			    "flags %x\n",
+			    __func__, status,
+			    lbp->b_error,
+			    lbp->b_bufsize, lbp->b_lblkno, lbp->b_resid,
+			    lbp->b_flags);
 		}
 	}
 #endif
