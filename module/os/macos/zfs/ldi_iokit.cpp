@@ -1219,13 +1219,18 @@ ldi_iokit_io_intr(void *target, void *parameter,
 		printf("%s %s %llx / %llx\n", __func__,
 		    "actualByteCount != lbp->b_bcount",
 		    actualByteCount, lbp->b_bcount);
-		if (ldi_zfs_handle)
-			printf("%s status %d %d %s\n", __func__, status,
+		if (ldi_zfs_handle) {
+			const char *s = ldi_zfs_handle->stringFromReturn(status);
+			printf("%s status %x, err %d, %s\n", __func__, status,
 			    ldi_zfs_handle->errnoFromReturn(status),
-			    ldi_zfs_handle->stringFromReturn(status));
-		else
-			printf("%s status %d ldi_zfs_handle is NULL\n",
-			    __func__, status);
+			    (s != NULL) ? s : "no stringFromReturn");
+		} else {
+			const char *s = stringFromReturn(status);
+			printf("%s status %x ldi_zfs_handle is NULL, err %d, %s\n",
+			    __func__, status,
+			    errnoFromReturn(status),
+			    (s != NULL) ? s : "no stringFromReturn");
+		}
 	}
 #endif
 
