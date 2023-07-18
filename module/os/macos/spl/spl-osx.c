@@ -449,9 +449,13 @@ spl_start(kmod_info_t *ki, void *d)
 	boot_ncpus = max_ncpus;
 
 #if defined(__arm64__)
-	boot_ncpus = max_ncpus - 4; // smd placeholder, no E-cores
-	boot_ncpus -= 4;            // smd placeholder, breathing room
+	// come back to this later
+	// boot_ncpus = max_ncpus - 4; // smd placeholder, no E-cores
+	// boot_ncpus -= 4;            // smd placeholder, breathing room
+
+	/* see change in spa.c */
 #endif
+
 
 	printf("ZFS SPL: %s:%d:%s max_ncpus %u boot_ncpus %u\n",
 	    __FILE__, __LINE__, __func__, max_ncpus, boot_ncpus);
