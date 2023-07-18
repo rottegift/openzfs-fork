@@ -1225,11 +1225,8 @@ ldi_iokit_io_intr(void *target, void *parameter,
 			    ldi_zfs_handle->errnoFromReturn(status),
 			    (s != NULL) ? s : "no stringFromReturn");
 		} else {
-			const char *s = stringFromReturn(status);
-			printf("%s status %x ldi_zfs_handle is NULL, err %d, %s\n",
-			    __func__, status,
-			    errnoFromReturn(status),
-			    (s != NULL) ? s : "no stringFromReturn");
+			printf("%s status %x, ldi_zfs_handle is NULL\n",
+			    __func__, status);
 		}
 	}
 #endif
