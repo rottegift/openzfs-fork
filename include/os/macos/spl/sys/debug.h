@@ -168,15 +168,26 @@ void print_symbol(uintptr_t symbol);
  */
 #ifdef NDEBUG
 
-#define	ASSERT(x)		((void)0)
-#define	ASSERT3B(x,y,z)		((void)0)
-#define	ASSERT3S(x,y,z)		((void)0)
-#define	ASSERT3U(x,y,z)		((void)0)
-#define	ASSERT3P(x,y,z)		((void)0)
-#define	ASSERT0(x)		((void)0)
-#define	ASSERTV(x)		((void)0)
-#define	IMPLY(A, B)		((void)0)
-#define	EQUIV(A, B)		((void)0)
+/*
+ * To avoid "variable 'x' set but not used" with all ASSERTS
+ */
+
+#define	ASSERT(x)		((void) sizeof ((uintptr_t)(x)))
+#define	ASSERT3B(x, y, z)						\
+	((void) sizeof ((uintptr_t)(x)), (void) sizeof ((uintptr_t)(z)))
+#define	ASSERT3S(x, y, z)						\
+	((void) sizeof ((uintptr_t)(x)), (void) sizeof ((uintptr_t)(z)))
+#define	ASSERT3U(x, y, z)						\
+	((void) sizeof ((uintptr_t)(x)), (void) sizeof ((uintptr_t)(z)))
+#define	ASSERT3P(x, y, z)						\
+	((void) sizeof ((uintptr_t)(x)), (void) sizeof ((uintptr_t)(z)))
+#define	ASSERT0(x)		((void) sizeof ((uintptr_t)(x)))
+#define	IMPLY(A, B)							\
+	((void) sizeof ((uintptr_t)(A)), (void) sizeof ((uintptr_t)(B)))
+#define	EQUIV(A, B)		\
+	((void) sizeof ((uintptr_t)(A)), (void) sizeof ((uintptr_t)(B)))
+#define	ASSERTV(X)	__maybe_unused X
+
 
 /*
  * Debugging enabled (--enable-debug)
@@ -190,7 +201,7 @@ void print_symbol(uintptr_t symbol);
 #define	ASSERT3P	VERIFY3P
 #define	ASSERT0		VERIFY0
 #define	ASSERT		VERIFY
-#define	ASSERTV(X)	X
+#define	ASSERTV(X)	X __maybe_unused
 #define	IMPLY(A, B) \
 	((void)(((!(A)) || (B)) || \
 	    spl_panic(__FILE__, __FUNCTION__, __LINE__, \
@@ -250,15 +261,17 @@ __attribute__((noinline)) int assfail(const char *str, const char *file,
  * and
  *      if (a) then (b) *AND* if (b) then (a)
  */
-#define	IMPLY(A, B)						\
-	((void)(((!(A)) || (B)) ||				\
-	    printf("%s:%d (" #A ") implies (" #B "): failed\n",	\
-		__FILE__, __LINE__)))
+static inline int
+spl_implyout(const char *buf, const char *file, const char *func, int line)
+{
+	spl_panic(file, func, line, "%s", buf);
+	return (0);
+}
 
-#define	EQUIV(A, B)							\
-	((void)((!!(A) == !!(B)) ||					\
-	    printf("%s:%d (" #A ") is equivalent to (" #B "): failed\n", \
-		__FILE__, __LINE__)))
+#define	IMPLY(A, B)							\
+	((void) sizeof ((uintptr_t)(A)), (void) sizeof ((uintptr_t)(B)))
+#define	EQUIV(A, B)		\
+	((void) sizeof ((uintptr_t)(A)), (void) sizeof ((uintptr_t)(B)))
 
 #endif /* MACOS_ASSERT_SHOULD_PANIC */
 #endif /* NDEBUG */
