@@ -32,13 +32,13 @@
 #include <kern/clock.h>
 
 /* Open Solaris lbolt is in hz */
-static inline uint64_t
+static inline int64_t
 zfs_lbolt(void)
 {
 	struct timeval tv;
-	uint64_t lbolt_hz;
+	int64_t lbolt_hz;
 	microuptime(&tv);
-	lbolt_hz = ((uint64_t)tv.tv_sec * USEC_PER_SEC + tv.tv_usec) / 10000;
+	lbolt_hz = ((int64_t)tv.tv_sec * USEC_PER_SEC + tv.tv_usec) / 10000;
 	return (lbolt_hz);
 }
 
