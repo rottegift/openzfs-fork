@@ -39,6 +39,10 @@
 #include "../../libzfs_impl.h"
 #include <dlfcn.h>
 
+#ifndef kIOMainPortDefault
+#define	kIOMainPortDefault kIOMasterPortDefault
+#endif
+
 /*
  * Usually getmntany would live in libspl, further down the library
  * dependency tree, but in the case of "mimick" of hfs/apfs, we need
@@ -227,7 +231,7 @@ expand_disk_to_zfs(char *devname, int len)
 
 	device = &devname[5];
 
-	matchingDict = IOBSDNameMatching(kIOMasterPortDefault, 0, device);
+	matchingDict = IOBSDNameMatching(kIOMainPortDefault, 0, device);
 	if (NULL == matchingDict)
 		return (0);
 
@@ -237,7 +241,7 @@ expand_disk_to_zfs(char *devname, int len)
 	 * IOServiceGetMatchingService is used instead of
 	 * IOServiceGetMatchingServices to simplify the code.
 	 */
-	service = IOServiceGetMatchingService(kIOMasterPortDefault,
+	service = IOServiceGetMatchingService(kIOMainPortDefault,
 	    matchingDict);
 
 	if (IO_OBJECT_NULL == service)

@@ -58,6 +58,10 @@
 #include <IOKit/IOKitLib.h>
 #include <IOKit/storage/IOMedia.h>
 
+#ifndef kIOMainPortDefault
+#define	kIOMainPortDefault kIOMasterPortDefault
+#endif
+
 /*
  * The default OpenZFS icon. Compare against known values to see if it needs
  * updating. Allowing users to set own.
@@ -910,7 +914,7 @@ zpool_disable_volume_os(const char *name)
 	matching = IOServiceNameMatching(fullname);
 	if (matching == 0)
 		goto out;
-	service = IOServiceGetMatchingService(kIOMasterPortDefault, matching);
+	service = IOServiceGetMatchingService(kIOMainPortDefault, matching);
 	if (service == 0)
 		goto out;
 	// printf("GetMatching said %p\n", service);

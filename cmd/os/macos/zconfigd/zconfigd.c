@@ -103,6 +103,10 @@
 
 #include "zconfigd.h"
 
+#ifndef IOMainPort
+#define	IOMainPort IOMasterPort
+#endif
+
 // globals
 static IONotificationPortRef gNotifyPort;
 static io_iterator_t gKextLoadedIter;
@@ -171,7 +175,7 @@ main(int argc, const char *argv[])
 		fprintf(stderr, "Could not establish new signal handler");
 
 	// first create a master_port for my task
-	kr = IOMasterPort(MACH_PORT_NULL, &masterPort);
+	kr = IOMainPort(MACH_PORT_NULL, &masterPort);
 	if (kr || !masterPort) {
 		fprintf(stderr, "ERR: Couldn't create a master IOKit "
 		    "Port(%08x)\n", kr);

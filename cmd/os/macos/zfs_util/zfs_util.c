@@ -94,6 +94,10 @@ int zfs_util_debug = 0;
 
 // #define	ZFS_AUTOIMPORT_ZPOOL_CACHE_ONLY
 
+#ifndef kIOMainPortDefault
+#define	kIOMainPortDefault kIOMasterPortDefault
+#endif
+
 const char *progname;
 libzfs_handle_t *g_zfs;
 
@@ -152,11 +156,11 @@ is_optical_media(const char *bsdname)
 	kern_return_t kernResult;
 	io_iterator_t iter;
 
-	if ((matchingDict = IOBSDNameMatching(kIOMasterPortDefault,
+	if ((matchingDict = IOBSDNameMatching(kIOMainPortDefault,
 	    0, bsdname)) == NULL)
 		return (0);
 
-	start = IOServiceGetMatchingService(kIOMasterPortDefault, matchingDict);
+	start = IOServiceGetMatchingService(kIOMainPortDefault, matchingDict);
 	if (IO_OBJECT_NULL == start)
 		return (0);
 
@@ -525,7 +529,7 @@ zfs_probe_iokit(const char *devpath, probe_args_t *args)
 
 	printf("%s: looking for '%s' in ioreg\n", __func__, name);
 
-	matchingDict = IOBSDNameMatching(kIOMasterPortDefault, 0, name);
+	matchingDict = IOBSDNameMatching(kIOMainPortDefault, 0, name);
 	if (NULL == matchingDict) {
 		printf("%s: IOBSDNameMatching returned NULL dictionary\n",
 		    __func__);
@@ -538,7 +542,7 @@ zfs_probe_iokit(const char *devpath, probe_args_t *args)
 	 * IOServiceGetMatchingService is used instead of
 	 * IOServiceGetMatchingServices to simplify the code.
 	 */
-	service = IOServiceGetMatchingService(kIOMasterPortDefault,
+	service = IOServiceGetMatchingService(kIOMainPortDefault,
 	    matchingDict);
 
 	if (IO_OBJECT_NULL == service) {
