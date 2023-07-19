@@ -87,7 +87,7 @@ static uint_t zfsdev_private_tsd;
 dev_t
 zfsdev_get_dev(void)
 {
-	return ((dev_t)tsd_get(zfsdev_private_tsd));
+	return ((dev_t)(uintptr_t)tsd_get(zfsdev_private_tsd));
 }
 
 /* We can't set ->private method, so this function does nothing */
@@ -103,7 +103,7 @@ zfsdev_private_set_state(void *priv, zfsdev_state_t *zs)
 zfsdev_state_t *
 zfsdev_private_get_state(void *priv)
 {
-	dev_t dev = (dev_t)priv;
+	dev_t dev = (dev_t)(uintptr_t)priv;
 	zfsdev_state_t *zs;
 	mutex_enter(&zfsdev_state_lock);
 	zs = zfsdev_get_state(dev, ZST_ALL);
@@ -270,7 +270,7 @@ static int
 zfs_ioc_osx_proxy_remove(const char *unused, nvlist_t *innvl,
     nvlist_t *outnvl)
 {
-	char *osname = NULL;
+	const char *osname = NULL;
 
 	if (nvlist_lookup_string(innvl,
 	    ZPOOL_CONFIG_POOL_NAME, &osname) != 0)
@@ -408,7 +408,7 @@ zfsdev_attach(void)
 
 	dev = makedev(zfs_major, 0); /* Get the device number */
 	zfs_devnode = devfs_make_node_clone(dev, DEVFS_CHAR, UID_ROOT,
-	    GID_WHEEL, 0666, zfs_devfs_clone, "zfs", 0);
+	    GID_WHEEL, 0666, zfs_devfs_clone, "zfs");
 	if (!zfs_devnode) {
 		printf("ZFS: devfs_make_node() failed\n");
 		return (-1);

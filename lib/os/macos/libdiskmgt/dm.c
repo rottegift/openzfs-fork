@@ -27,13 +27,13 @@
 #include <libdiskmgt.h>
 
 void
-libdiskmgt_init()
+libdiskmgt_init(void)
 {
 	diskutil_init();
 }
 
 void
-libdiskmgt_fini()
+libdiskmgt_fini(void)
 {
 	diskutil_fini();
 }

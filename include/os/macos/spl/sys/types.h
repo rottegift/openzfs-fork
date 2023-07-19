@@ -69,7 +69,20 @@ extern unsigned long strnlen(const char *, unsigned long);
 #define	LLONG_MAX			((long long)(~0ULL>>1))
 #endif
 
-enum { B_FALSE = 0, B_TRUE = 1 };
+#ifdef NEED_SOLARIS_BOOLEAN
+
+#if defined(__XOPEN_OR_POSIX)
+typedef enum { _B_FALSE, _B_TRUE }	boolean_t;
+#else
+typedef enum { B_FALSE, B_TRUE }	boolean_t;
+#endif /* defined(__XOPEN_OR_POSIX) */
+#else
+
+#define	B_FALSE 0
+#define	B_TRUE  1
+
+#endif /* NEED_SOLARIS_BOOLEAN */
+
 typedef short			pri_t;
 typedef unsigned long		ulong_t;
 typedef unsigned long long	u_longlong_t;

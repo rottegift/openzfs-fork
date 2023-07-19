@@ -190,7 +190,7 @@ vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	struct dk_minfo_ext *dkmext = &dks.ude;
 	struct dk_minfo *dkm = &dks.ud;
 	int error;
-	uint64_t capacity = 0, blksz = 0, pbsize;
+	uint64_t __maybe_unused capacity = 0, blksz = 0, pbsize;
 	int isssd;
 
 	/*

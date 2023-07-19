@@ -101,8 +101,6 @@ xgetbv(uint32_t c)
 extern uint64_t spl_cpuid_features(void);
 extern uint64_t spl_cpuid_leaf7_features(void);
 
-#define	ZFS_ASM_BUG()	{ ASSERT(0); } break
-
 #endif
 
 /*
@@ -112,8 +110,6 @@ extern uint64_t spl_cpuid_leaf7_features(void);
 #if !defined(_KERNEL)
 
 #include <assert.h>
-
-#define	ZFS_ASM_BUG()	{ assert(0); } break
 
 /*
  * x86 registers used implicitly by CPUID

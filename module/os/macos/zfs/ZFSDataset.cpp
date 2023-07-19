@@ -488,7 +488,7 @@ ZFSDataset::withDatasetNameAndSize(const char *name, uint64_t size)
 	OSString *uuidStr = NULL;
 	OSObject *property = NULL;
 	char uuid_cstr[37];
-	uint64_t objnum, readonly, guid;
+	uint64_t __maybe_unused objnum, readonly, __maybe_unused guid;
 #if 0
 	// uint64_t ref_size, avail_size, obj_count, obj_free;
 #endif

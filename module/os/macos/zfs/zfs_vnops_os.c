@@ -1436,7 +1436,6 @@ zfs_readdir(vnode_t *vp, zfs_uio_t *uio, cred_t *cr, int *eofp,
 	uint8_t		type;
 	int			numdirent = 0;
 	char		*bufptr;
-	boolean_t	isdotdir = B_TRUE;
 
 	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
 		return (error);
@@ -1529,9 +1528,6 @@ zfs_readdir(vnode_t *vp, zfs_uio_t *uio, cred_t *cr, int *eofp,
 			objnum = ZFSCTL_INO_ROOT;
 			type = DT_DIR;
 		} else {
-
-			/* This is not a special case directory */
-			isdotdir = B_FALSE;
 
 			/*
 			 * Grab next entry.
@@ -3561,7 +3557,6 @@ zfs_link(znode_t *tdzp, znode_t *szp, char *name, cred_t *cr,
 	uid_t		owner;
 	boolean_t	waited = B_FALSE;
 	boolean_t	is_tmpfile = 0;
-	uint64_t	txg;
 
 	ASSERT(S_ISDIR(tdzp->z_mode));
 
@@ -3693,7 +3688,7 @@ top:
 		/* restore z_unlinked since when linking failed */
 		szp->z_unlinked = B_TRUE;
 	}
-	txg = dmu_tx_get_txg(tx);
+
 	dmu_tx_commit(tx);
 
 	zfs_dirent_unlock(dl);

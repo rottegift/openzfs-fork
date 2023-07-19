@@ -30,6 +30,6 @@
 
 #include <sys/types.h>
 
-#define	xcopyout	copyout
+#define	xcopyout(K, U, L)	copyout((K), (user_addr_t)(U), (L))
 
 #endif /* SPL_VMSYSTM_H */

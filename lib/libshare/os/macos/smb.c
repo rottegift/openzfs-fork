@@ -98,7 +98,7 @@ spawn_with_pipe(const char *path, char *argv[], int flags)
 	if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd) != 0)
 		return (-1);
 
-	pid = vfork();
+	pid = fork();
 
 	// Child
 	if (pid == 0) {

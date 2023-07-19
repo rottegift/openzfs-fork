@@ -173,7 +173,8 @@ panic_print_macho_symbol_name(kernel_mach_header_t *mh, vm_address_t search,
 	struct symtab_command		*orig_st = NULL;
 	unsigned int			i;
 	char				*strings, *bestsym = NULL;
-	vm_address_t			bestaddr = 0, diff, curdiff;
+	vm_address_t			bestaddr __maybe_unused = 0;
+	vm_address_t 			diff, curdiff;
 
 	/*
 	 * Assume that if it's loaded and linked into the kernel,

@@ -43,7 +43,7 @@ macos_zfs_CPPFLAGS = \
 	-nostdinc \
 	-mkernel \
 	-fno-builtin-printf \
-	-Wframe-larger-than=400 \
+	-Wframe-larger-than=1000 \
 	-D__KERNEL__ \
 	-D_KERNEL \
 	-DKERNEL \

@@ -128,10 +128,10 @@ static int	invalid_name_used = 0;
 
 void listall(char *prefix, struct list *lp);
 void old_parse(char *string, int flags);
-void debuginit(void);
-void vfsinit(void);
+static void debuginit(void);
+static void vfsinit(void);
 int  findname(char *string, char *level, char **bufp, struct list *namelist);
-void usage(void);
+static void usage(void);
 
 static void 	parse(char *string, int flags);
 static int	parsefile(const char *);
@@ -148,15 +148,13 @@ static int	name2oid(char *, int *);
 #define	CONSDEV		0x00000004
 
 int
-main(argc, argv)
-int argc;
-char *argv[];
+main(int argc, char *argv[])
 {
 	//	extern char *optarg;   // unused
-    extern int optind;
-    int ch, lvl1;
+	extern int optind;
+	int ch, lvl1;
 
-    while ((ch = getopt(argc, argv, "Aabf:nwX")) != EOF) {
+	while ((ch = getopt(argc, argv, "Aabf:nwX")) != EOF) {
 		switch (ch) {
 			case 'A': Aflag = 1; break;
 			case 'a': aflag = 1; break;
@@ -198,14 +196,12 @@ char *argv[];
  * List all variables known to the system.
  */
 void
-listall(prefix, lp)
-char *prefix;
-struct list *lp;
+listall(char *prefix, struct list *lp)
 {
 	int lvl2;
 	char *cp, name[BUFSIZ];
 
-    if (lp->list == 0)
+	if (lp->list == 0)
 		return;
 	strcpy(name, prefix);
 	cp = &name[strlen(name)];
@@ -224,9 +220,7 @@ struct list *lp;
  * Set a new value if requested.
  */
 void
-old_parse(string, flags)
-char *string;
-int flags;
+old_parse(char *string, int flags)
 {
 	int indx, type, len;
 	size_t size;
@@ -520,8 +514,8 @@ int flags;
 /*
  * Initialize the set of debugging names
  */
-void
-debuginit()
+static void
+debuginit(void)
 {
 	int mib[3], loc, i;
 	size_t size;
@@ -546,8 +540,8 @@ debuginit()
 /*
  * Initialize the set of filesystem names
  */
-void
-vfsinit()
+static void
+vfsinit(void)
 {
 	int mib[4], maxtypenum, cnt, loc, size;
 	struct vfsconf vfc;
@@ -590,11 +584,7 @@ vfsinit()
  * Scan a list of names searching for a particular name.
  */
 int
-findname(string, level, bufp, namelist)
-char *string;
-char *level;
-char **bufp;
-struct list *namelist;
+findname(char *string, char *level, char **bufp, struct list *namelist)
 {
 	char *name;
 	int i;
@@ -612,7 +602,7 @@ struct list *namelist;
 	}
 	for (i = 0; i < namelist->size; i++)
 		if (namelist->list[i].ctl_name != NULL &&
-			strcmp(name, namelist->list[i].ctl_name) == 0)
+		    strcmp(name, namelist->list[i].ctl_name) == 0)
 			break;
 	if (i == namelist->size) {
 		if (!foundSome) {
@@ -625,8 +615,8 @@ struct list *namelist;
 	return (i);
 }
 
-void
-usage()
+static void
+usage(void)
 {
 	(void) fprintf(stderr, "%s\n%s\n%s\n%s\n%s\n%s\n",
 	    "usage: zsysctl [-bn] variable ...",
@@ -788,13 +778,13 @@ parsefile(const char *filename)
 {
 	FILE *file;
 	char line[BUFSIZ], *p, *pq, *pdq;
-	int warncount = 0, lineno = 0;
+	// int warncount = 0, lineno = 0;
 
 	file = fopen(filename, "r");
 	if (file == NULL)
 		err(1, "%s", filename);
 	while (fgets(line, sizeof (line), file) != NULL) {
-		lineno++;
+		//		lineno++;
 		p = line;
 		pq = strchr(line, '\'');
 		pdq = strchr(line, '\"');
@@ -830,7 +820,8 @@ parsefile(const char *filename)
 	}
 	fclose(file);
 
-	return (warncount);
+	//	return (warncount);
+	return (0);
 }
 
 /* These functions will dump out various interesting structures. */

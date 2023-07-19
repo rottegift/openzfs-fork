@@ -21,4 +21,4 @@ libdiskmgt_la_SOURCES = \
 	%D%/inuse_zpool.c \
 	%D%/slice.c
 
-libdiskmgt_la_LDFLAGS = -version-info 1:0:0 -framework DiskArbitration -framework CoreServices
+libdiskmgt_la_LDFLAGS = -framework DiskArbitration -framework CoreServices

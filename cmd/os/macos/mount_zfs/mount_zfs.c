@@ -98,7 +98,8 @@ main(int argc, char **argv)
 	char mntpoint[PATH_MAX];
 	char dataset[PATH_MAX], *pdataset = dataset;
 	unsigned long mntflags = 0, zfsflags = 0, remount = 0;
-	int sloppy = 0, fake = 0, verbose = 0, nomtab = 0, zfsutil = 0;
+	int sloppy = 0, fake = 0, verbose = 0, nomtab __maybe_unused = 0;
+	int zfsutil = 0;
 	int error, c;
 
 	(void) setlocale(LC_ALL, "");

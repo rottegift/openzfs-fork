@@ -60,7 +60,6 @@
 #include <sys/dmu.h>
 #include <sys/dmu_objset.h>
 #include <sys/dmu_tx.h>
-#include <sys/zfs_refcount.h>
 #include <sys/stat.h>
 #include <sys/zap.h>
 #include <sys/zfs_znode.h>
@@ -341,7 +340,6 @@ zfs_znode_hold_enter(zfsvfs_t *zfsvfs, uint64_t obj)
 		kmem_cache_free(znode_hold_cache, zh_new);
 
 	ASSERT(MUTEX_NOT_HELD(&zh->zh_lock));
-	ASSERT3S(zfs_refcount_count(&zh->zh_refcount), >, 0);
 	mutex_enter(&zh->zh_lock);
 
 	return (zh);
@@ -354,7 +352,6 @@ zfs_znode_hold_exit(zfsvfs_t *zfsvfs, znode_hold_t *zh)
 	boolean_t remove = B_FALSE;
 
 	ASSERT(zfs_znode_held(zfsvfs, zh->zh_obj));
-	ASSERT3S(zfs_refcount_count(&zh->zh_refcount), >, 0);
 	mutex_exit(&zh->zh_lock);
 
 	mutex_enter(&zfsvfs->z_hold_locks[i]);
@@ -542,7 +539,7 @@ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_buf_t *db, int blksz,
     dmu_object_type_t obj_type, sa_handle_t *hdl)
 {
 	znode_t	*zp;
-	struct vnode *vp;
+	struct vnode __maybe_unused *vp;
 	uint64_t mode;
 	uint64_t parent;
 	sa_bulk_attr_t bulk[11];

@@ -938,7 +938,7 @@ zvol_os_close(dev_t dev, int flag, int otyp, struct proc *p)
 	error = zvol_os_close_zv(zv, flag, otyp, p);
 
 	mutex_exit(&zv->zv_state_lock);
-	return (0);
+	return (error);
 }
 
 void

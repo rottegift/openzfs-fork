@@ -876,7 +876,6 @@ taskq_delay_dispatcher_thread(void *notused)
 
 	mutex_enter(&tqd_delay_lock);
 	while (tqd_do_exit == 0) {
-		int didsleep = 0;
 		tqdelay_t *tqdnode;
 		CALLB_CPR_SAFE_BEGIN(&cpr);
 
@@ -889,7 +888,7 @@ taskq_delay_dispatcher_thread(void *notused)
 		if (tqdnode == NULL)
 			(void) cv_wait(&tqd_delay_cv, &tqd_delay_lock);
 		else
-			didsleep = cv_timedwait(&tqd_delay_cv,
+			cv_timedwait(&tqd_delay_cv,
 			    &tqd_delay_lock, tqdnode->tqd_time);
 		CALLB_CPR_SAFE_END(&cpr, &tqd_delay_lock);
 
@@ -1021,7 +1020,7 @@ taskq_cancel_id(taskq_t *tq, taskqid_t id)
 	 * but we don't know for *sure*, but presumably
 	 * it has an "id" because it called dispatch_delay().
 	 */
-	if (id != NULL) {
+	if ((void *)id != NULL) {
 		taskq_wait_id(tq, id);
 		return (EBUSY); /* EBUSY ? how can we *know* it ran? */
 	}
@@ -1773,7 +1772,7 @@ taskq_of_curthread(void)
 static void
 taskq_thread_create(taskq_t *tq)
 {
-	kthread_t	*t;
+	kthread_t	*t __maybe_unused;
 	const boolean_t	first = (tq->tq_nthreads == 0);
 
 	ASSERT(MUTEX_HELD(&tq->tq_lock));

@@ -399,7 +399,7 @@ zpool_find_import_blkid(libpc_handle_t *hdl, pthread_mutex_t *lock,
 	char path[MAXPATHLEN];
 	char *end;
 	const char **dir;
-	size_t pathleft;
+	size_t __maybe_unused pathleft;
 	avl_index_t where;
 	rdsk_node_t *slice;
 	int error = 0;

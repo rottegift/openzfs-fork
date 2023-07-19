@@ -540,7 +540,7 @@ zfs_get_temporary_prop(dsl_dataset_t *ds, zfs_prop_t zfs_prop, uint64_t *val,
 {
 	int error;
 	zfsvfs_t *zfvp;
-	mount_t vfsp;
+//	mount_t vfsp;
 	objset_t *os;
 	uint64_t tmp = *val;
 
@@ -557,7 +557,7 @@ zfs_get_temporary_prop(dsl_dataset_t *ds, zfs_prop_t zfs_prop, uint64_t *val,
 	if (zfvp == NULL)
 		return (ESRCH);
 
-	vfsp = zfvp->z_vfs;
+//	vfsp = zfvp->z_vfs;
 
 	switch (zfs_prop) {
 		case ZFS_PROP_ATIME:
@@ -1299,7 +1299,7 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
 	char		*osname = NULL;
 	char		*options = NULL;
 	int		error = 0;
-	int		rdonly = 0;
+	int __maybe_unused rdonly = 0;
 	int		mflag = 0;
 	char		*proxy = NULL;
 	struct zfs_mount_args mnt_args;

@@ -22,7 +22,7 @@
 #include <zone.h>
 
 zoneid_t
-getzoneid()
+getzoneid(void)
 {
 	return (GLOBAL_ZONEID);
 }

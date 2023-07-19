@@ -93,7 +93,7 @@ read_buffers(char *out_buffer, int out_length)
 }
 
 void
-diskutil_init()
+diskutil_init(void)
 {
 	diskutil_info_cache = CFDictionaryCreateMutable(NULL, 0,
 	    &kCFCopyStringDictionaryKeyCallBacks,
@@ -105,7 +105,7 @@ diskutil_init()
 }
 
 void
-diskutil_fini()
+diskutil_fini(void)
 {
 	CFRelease(diskutil_cs_info_cache);
 	CFRelease(diskutil_info_cache);
@@ -114,6 +114,7 @@ diskutil_fini()
 void
 init_diskutil_info(DU_Info *info)
 {
+	(void) info;
 	info = NULL;
 }
 
