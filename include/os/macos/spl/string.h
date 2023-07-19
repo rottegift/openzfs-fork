@@ -22,30 +22,11 @@
 #ifndef _SPL_STRING_H
 #define	_SPL_STRING_H
 
-/*
- * strcmp() has been deprecated in macOS 11, but case is needed to change
- * to strncmp(). For now, we just create a simple spl_strcmp() until
- * upstream can be changed.
- */
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <TargetConditionals.h>
-#include <AvailabilityMacros.h>
-#if defined(MAC_OS_VERSION_11_0) &&	\
-	(MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_VERSION_11_0)
-#define	strcmp XNU_strcmp
-#endif /* MAC_OS */
-
 #include_next <string.h>
-
-#if defined(MAC_OS_VERSION_11_0) &&	\
-	(MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_VERSION_11_0)
-extern int spl_strcmp(const char *, const char *);
-#undef strcmp
-#define	strcmp spl_strcmp
-#endif /* MAC_OS */
 
 #ifdef __cplusplus
 }
