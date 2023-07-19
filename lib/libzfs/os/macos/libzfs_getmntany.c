@@ -39,10 +39,6 @@
 #include "../../libzfs_impl.h"
 #include <dlfcn.h>
 
-#ifndef kIOMainPortDefault
-#define	kIOMainPortDefault kIOMasterPortDefault
-#endif
-
 /*
  * Usually getmntany would live in libspl, further down the library
  * dependency tree, but in the case of "mimick" of hfs/apfs, we need

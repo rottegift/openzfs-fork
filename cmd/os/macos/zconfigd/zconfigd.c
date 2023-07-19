@@ -100,12 +100,9 @@
 #include <IOKit/IOKitLib.h>
 #include <mach/mach.h>
 #include <sys/stat.h>
+#include <sys/zfs_context.h>
 
 #include "zconfigd.h"
-
-#ifndef IOMainPort
-#define	IOMainPort IOMasterPort
-#endif
 
 // globals
 static IONotificationPortRef gNotifyPort;

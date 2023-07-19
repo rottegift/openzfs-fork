@@ -223,5 +223,4 @@ void sysctl_os_fini(void);
 #endif
 
 #endif // _KERNEL
-
 #endif

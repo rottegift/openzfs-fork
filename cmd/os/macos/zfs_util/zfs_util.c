@@ -94,10 +94,6 @@ int zfs_util_debug = 0;
 
 // #define	ZFS_AUTOIMPORT_ZPOOL_CACHE_ONLY
 
-#ifndef kIOMainPortDefault
-#define	kIOMainPortDefault kIOMasterPortDefault
-#endif
-
 const char *progname;
 libzfs_handle_t *g_zfs;
 

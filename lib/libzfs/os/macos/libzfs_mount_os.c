@@ -58,10 +58,6 @@
 #include <IOKit/IOKitLib.h>
 #include <IOKit/storage/IOMedia.h>
 
-#ifndef kIOMainPortDefault
-#define	kIOMainPortDefault kIOMasterPortDefault
-#endif
-
 /*
  * The default OpenZFS icon. Compare against known values to see if it needs
  * updating. Allowing users to set own.

@@ -65,4 +65,12 @@ extern void libzfs_macos_wrapfd(int *srcfd, boolean_t send);
 extern void libzfs_macos_wrapclose(void);
 extern int  libzfs_macos_pipefd(int *read_fd, int *write_fd);
 
+#include <TargetConditionals.h>
+#include <AvailabilityMacros.h>
+#if !defined(MAC_OS_VERSION_12_0) || \
+	(MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_VERSION_12_0)
+#define	kIOMainPortDefault kIOMasterPortDefault
+#define	IOMainPort IOMasterPort
+#endif /* MAC_OS */
+
 #endif
