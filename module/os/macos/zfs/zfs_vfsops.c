@@ -2669,7 +2669,7 @@ zfs_suspend_fs(zfsvfs_t *zfsvfs)
 int
 zfs_resume_fs(zfsvfs_t *zfsvfs, dsl_dataset_t *ds)
 {
-	int err, err2;
+	int err, __maybe_unused err2;
 	znode_t *zp;
 
 	ASSERT(RRM_WRITE_HELD(&zfsvfs->z_teardown_lock));

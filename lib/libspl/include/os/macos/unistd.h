@@ -84,4 +84,11 @@ pipe2(int fildes[2], int flags)
 #define	mkostemps(template, slen, oflag) mkstemps((template), (slen))
 #endif
 
+static inline
+void
+setproctitle(const char *fmt, ...)
+{
+	(void) fmt;
+}
+
 #endif
