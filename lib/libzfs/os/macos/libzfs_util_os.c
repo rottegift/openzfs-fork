@@ -19,7 +19,6 @@
  * CDDL HEADER END
  */
 
-
 #include <errno.h>
 #include <fcntl.h>
 #include <libintl.h>
@@ -372,7 +371,7 @@ pipe_io_relay(void *arg)
 	unsigned char space[1024];
 	int size = 1024 * 1024;
 	int red, sent;
-	uint64_t total = 0;
+	uint64_t __maybe_unused total = 0;
 
 	readfd = p2f->from;
 	writefd = p2f->to;
@@ -529,11 +528,16 @@ libzfs_macos_wrapfd(int *srcfd, boolean_t send)
 #ifdef VERBOSE_WRAPFD
 	fprintf(stderr, "%s: is pipe: work on fd %d\r\n", __func__, *srcfd);
 #endif
-	snprintf(template, sizeof (template), "/tmp/.zfs.pipe.XXXXXX");
 
-	mktemp(template);
-
-	mkfifo(template, 0600);
+	/*
+	 * mktemp() has been deprecated, even though we want to use it
+	 * with mkfifo() (which is safe from MitM). Jump some hoops to
+	 * work around it.
+	 */
+	do {
+		snprintf(template, sizeof (template), "/tmp/.zfs.pipe.%u",
+		    arc4random());
+	} while (mkfifo(template, 0600) != 0);
 
 	pipe_relay_readfd = open(template, O_RDONLY | O_NONBLOCK);
 
@@ -636,11 +640,15 @@ libzfs_macos_pipefd(int *read_fd, int *write_fd)
 {
 	char template[100];
 
-	snprintf(template, sizeof (template), "/tmp/.zfs.diff.XXXXXX");
-	mktemp(template);
-
-	if (mkfifo(template, 0600))
-		return (-1);
+	/*
+	 * mktemp() has been deprecated, even though we want to use it
+	 * with mkfifo() (which is safe from MitM). Jump some hoops to
+	 * work around it.
+	 */
+	do {
+		snprintf(template, sizeof (template), "/tmp/.zfs.pipe.%u",
+		    arc4random());
+	} while (mkfifo(template, 0600) != 0);
 
 	*read_fd = open(template, O_RDONLY | O_NONBLOCK);
 

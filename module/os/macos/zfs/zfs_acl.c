@@ -1719,7 +1719,7 @@ zfs_acl_ids_overquota(zfsvfs_t *zv, zfs_acl_ids_t *acl_ids, uint64_t projid)
  */
 int
 zfs_getacl(znode_t *zp, vsecattr_t *vsecp, boolean_t skipaclchk,
-	cred_t *cr)
+    cred_t *cr)
 {
 	(void) zp; (void) vsecp; (void) skipaclchk; (void) cr;
 	panic("Did not expect %s to be called.", __func__);
@@ -1727,7 +1727,7 @@ zfs_getacl(znode_t *zp, vsecattr_t *vsecp, boolean_t skipaclchk,
 
 int
 zfs_macos_getacl(znode_t *zp, struct kauth_acl **aclpp, boolean_t skipaclchk,
-	cred_t *cr)
+    cred_t *cr)
 {
 	zfs_acl_t	*aclp;
 	kauth_acl_t	k_acl;
