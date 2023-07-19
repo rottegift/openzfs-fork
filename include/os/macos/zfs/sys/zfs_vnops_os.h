@@ -174,6 +174,8 @@ extern int zfs_readdir(vnode_t *vp, zfs_uio_t *uio, cred_t *cr, int *eofp,
 extern int zfs_fsync(znode_t *zp, int syncflag, cred_t *cr);
 extern int zfs_getattr(vnode_t *vp, vattr_t *vap, int flags,
     cred_t *cr, caller_context_t *ct);
+extern int zfs_macos_getacl(znode_t *zp, struct kauth_acl **aclpp,
+    boolean_t skipaclchk, cred_t *cr);
 extern int zfs_readlink(vnode_t *vp, zfs_uio_t *uio, cred_t *cr);
 
 extern void   zfs_inactive(vnode_t *vp);
