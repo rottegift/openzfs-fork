@@ -451,8 +451,8 @@ for (_e = &_s[(count) - 1]; _e > _s; _e--)		\
 struct {
 	hrtime_t	kmp_timestamp;	/* timestamp of panic */
 	int		kmp_error;	/* type of kmem error */
-	void		*kmp_buffer;	/* buffer that induced panic */
-	void		*kmp_realbuf;	/* real start address for buffer */
+	const void	*kmp_buffer; /* buffer that induced panic */
+	const void	*kmp_realbuf; /* real start address for buffer */
 	kmem_cache_t	*kmp_cache;	/* buffer's cache according to client */
 	kmem_cache_t	*kmp_realcache;	/* actual cache containing buffer */
 	kmem_slab_t	*kmp_slab;	/* slab accoring to kmem_findslab() */
@@ -771,11 +771,11 @@ copy_pattern(uint64_t pattern, void *buf_arg, size_t size)
 		*buf++ = pattern;
 }
 
-static void *
-verify_pattern(uint64_t pattern, void *buf_arg, size_t size)
+static const void *
+verify_pattern(uint64_t pattern, const void *buf_arg, size_t size)
 {
-	uint64_t *bufend = (uint64_t *)((char *)buf_arg + size);
-	uint64_t *buf;
+	const uint64_t *bufend = (const uint64_t *)((char *)buf_arg + size);
+	const uint64_t *buf;
 
 	for (buf = buf_arg; buf < bufend; buf++)
 		if (*buf != pattern)
@@ -840,7 +840,7 @@ kmem_cache_applyall_id(void (*func)(kmem_cache_t *), taskq_t *tq, int tqflag)
  * Debugging support.  Given a buffer address, find its slab.
  */
 static kmem_slab_t *
-kmem_findslab(kmem_cache_t *cp, void *buf)
+kmem_findslab(kmem_cache_t *cp, const void *buf)
 {
 	kmem_slab_t *sp;
 
@@ -865,14 +865,14 @@ kmem_findslab(kmem_cache_t *cp, void *buf)
 }
 
 static void
-kmem_error(int error, kmem_cache_t *cparg, void *bufarg)
+kmem_error(int error, kmem_cache_t *cparg, const void *bufarg)
 {
 	kmem_buftag_t *btp = NULL;
 	kmem_bufctl_t *bcp = NULL;
 	kmem_cache_t *cp = cparg;
 	kmem_slab_t *sp;
-	uint64_t *off;
-	void *buf = bufarg;
+	const uint64_t *off;
+	const void *buf = bufarg;
 
 	kmem_logging = 0;	/* stop logging when a bad thing happens */
 
@@ -1990,7 +1990,6 @@ kmem_dump_finish(char *buf, size_t size)
 	int kdi_end = kmem_dump_log_idx;
 	int percent = 0;
 	int header = 0;
-	int warn = 0;
 	size_t used;
 	kmem_cache_t *cp;
 	kmem_dump_log_t *kdl;
@@ -2016,8 +2015,6 @@ kmem_dump_finish(char *buf, size_t size)
 		cp = kdl->kdl_cache;
 		if (cp == NULL)
 			break;
-		if (kdl->kdl_alloc_fails)
-			++warn;
 		if (header == 0) {
 			kmem_dumppr(&p, e,
 			    "Cache Name,Allocs,Frees,Alloc Fails,"
@@ -2393,7 +2390,7 @@ kmem_cache_parent_arena_fragmented(kmem_cache_t *cp)
  * Free a constructed object to cache cp.
  */
 void
-kmem_cache_free(kmem_cache_t *cp, void *buf)
+kmem_cache_free(kmem_cache_t *cp, const void *buf)
 {
 	kmem_cpu_cache_t *ccp = KMEM_CPU_CACHE(cp);
 
@@ -2411,11 +2408,13 @@ kmem_cache_free(kmem_cache_t *cp, void *buf)
 			ASSERT(!(ccp->cc_flags & KMF_DUMPDIVERT));
 			/* log it so that we can warn about it */
 			KDI_LOG(cp, kdl_unsafe);
-		} else if (KMEM_DUMPCC(ccp) && !kmem_cache_free_dump(cp, buf)) {
+		} else if (KMEM_DUMPCC(ccp) && !kmem_cache_free_dump(cp,
+		    __DECONST(void *, buf))) {
 			return;
 		}
 		if (ccp->cc_flags & KMF_BUFTAG) {
-			if (kmem_cache_free_debug(cp, buf, caller()) == -1)
+			if (kmem_cache_free_debug(cp, __DECONST(void *, buf),
+			    caller()) == -1)
 				return;
 		}
 	}
@@ -2430,7 +2429,8 @@ kmem_cache_free(kmem_cache_t *cp, void *buf)
 		 * loaded magazine, just put the object there and return.
 		 */
 		if ((uint_t)ccp->cc_rounds < ccp->cc_magsize) {
-			ccp->cc_loaded->mag_round[ccp->cc_rounds++] = buf;
+			ccp->cc_loaded->mag_round[ccp->cc_rounds++] =
+			    __DECONST(void *, buf);
 			ccp->cc_free++;
 			mutex_exit(&ccp->cc_lock);
 			return;
@@ -2478,7 +2478,7 @@ kmem_cache_free(kmem_cache_t *cp, void *buf)
 	}
 	mutex_exit(&ccp->cc_lock);
 	kpreempt(KPREEMPT_SYNC);
-	kmem_slab_free_constructed(cp, buf, B_TRUE);
+	kmem_slab_free_constructed(cp, __DECONST(void *, buf), B_TRUE);
 }
 
 /*

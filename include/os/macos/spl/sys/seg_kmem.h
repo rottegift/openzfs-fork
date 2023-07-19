@@ -56,7 +56,7 @@ extern vmem_t *abd_subpage_arena;
 #endif	/* __sparc */
 
 void *segkmem_alloc(vmem_t *, size_t, int);
-extern void segkmem_free(vmem_t *, void *, size_t);
+extern void segkmem_free(vmem_t *, const void *, size_t);
 extern void kernelheap_init(void);
 extern void kernelheap_fini(void);
 

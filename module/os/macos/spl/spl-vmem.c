@@ -1691,7 +1691,7 @@ do_alloc:
  * both routines bypass the quantum caches.
  */
 void
-vmem_xfree(vmem_t *vmp, void *vaddr, size_t size)
+vmem_xfree(vmem_t *vmp, const void *vaddr, size_t size)
 {
 	vmem_seg_t *vsp, *vnext, *vprev;
 
@@ -1735,7 +1735,8 @@ vmem_xfree(vmem_t *vmp, void *vaddr, size_t size)
 		vmem_span_destroy(vmp, vsp);
 		vmp->vm_kstat.vk_parent_free.value.ui64++;
 		mutex_exit(&vmp->vm_lock);
-		vmp->vm_source_free(vmp->vm_source, vaddr, size);
+		vmp->vm_source_free(vmp->vm_source,
+		    __DECONST(void *, vaddr), size);
 	} else {
 		vmem_freelist_insert(vmp, vsp);
 		mutex_exit(&vmp->vm_lock);
@@ -1920,7 +1921,8 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 	 * Less impossibly: if we lost the signal from
 	 * the worker, log that and carry one.
 	 */
-	for (unsigned int i = 0; vmp->vm_cb.c_done != B_TRUE; i++) {
+	unsigned int i __maybe_unused;
+	for (i = 0; vmp->vm_cb.c_done != B_TRUE; i++) {
 		int retval = cv_timedwait(&vmp->vm_stack_cv,
 		    &vmp->vm_stack_lock,
 		    ddi_get_lbolt() + SEC_TO_TICK(10));
@@ -2017,7 +2019,7 @@ wrapped_vmem_alloc_impl(vmem_t *vmp, size_t size, int vmflag)
  * Free the segment [vaddr, vaddr + size).
  */
 void
-vmem_free_impl(vmem_t *vmp, void *vaddr, size_t size)
+vmem_free_impl(vmem_t *vmp, const void *vaddr, size_t size)
 {
 	if (size - 1 < vmp->vm_qcache_max)
 		kmem_cache_free(vmp->vm_qcache[(size - 1) >> vmp->vm_qshift],
@@ -2191,7 +2193,7 @@ spl_vmem_size(vmem_t *vmp, int typemask)
 static vmem_t *
 vmem_create_common(const char *name, void *base, size_t size, size_t quantum,
     void *(*afunc)(vmem_t *, size_t, int),
-    void (*ffunc)(vmem_t *, void *, size_t),
+    void (*ffunc)(vmem_t *, const void *, size_t),
     vmem_t *source, size_t qcache_max, int vmflag)
 {
 	int i;
@@ -2264,7 +2266,7 @@ vmem_create_common(const char *name, void *base, size_t size, size_t quantum,
 		vmp->vm_kstat.vk_source_id.value.ui32 = source->vm_id;
 	vmp->vm_source = source;
 	vmp->vm_source_alloc = afunc;
-	vmp->vm_source_free = ffunc;
+	vmp->vm_source_free = __DECONST(void *, ffunc);
 
 	/*
 	 * Some arenas (like vmem_metadata and kmem_metadata) cannot
@@ -2739,9 +2741,9 @@ xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
 }
 
 static void
-xnu_free_throttled(vmem_t *vmp, void *vaddr, size_t size)
+xnu_free_throttled(vmem_t *vmp, const void *vaddr, size_t size)
 {
-	extern void osif_free(void *, uint64_t);
+	extern void osif_free(const void *, uint64_t);
 
 	osif_free(vaddr, size);
 	spl_xat_lastfree = gethrtime();
@@ -3135,7 +3137,7 @@ vmem_bucket_alloc(vmem_t *null_vmp, size_t size, const int vmflags)
 }
 
 static void
-vmem_bucket_free(vmem_t *null_vmp, void *vaddr, size_t size)
+vmem_bucket_free(vmem_t *null_vmp, const void *vaddr, size_t size)
 {
 	vmem_t *calling_arena = spl_heap_arena;
 
@@ -3294,9 +3296,9 @@ spl_vmem_default_alloc(vmem_t *vmp, size_t size, int vmflags)
 }
 
 static inline void
-spl_vmem_default_free(vmem_t *vmp, void *vaddr, size_t size)
+spl_vmem_default_free(vmem_t *vmp, const void *vaddr, size_t size)
 {
-	extern void osif_free(void *, uint64_t);
+	extern void osif_free(const void *, uint64_t);
 	osif_free(vaddr, size);
 }
 
@@ -3304,7 +3306,7 @@ vmem_t *
 vmem_init(const char *heap_name,
     void *heap_start, size_t heap_size, size_t heap_quantum,
     void *(*heap_alloc)(vmem_t *, size_t, int),
-    void (*heap_free)(vmem_t *, void *, size_t))
+    void (*heap_free)(vmem_t *, const void *, size_t))
 {
 	uint32_t id;
 	int nseg = VMEM_SEG_INITIAL;
@@ -3572,12 +3574,10 @@ void
 vmem_free_span_list(void)
 {
 	int total __maybe_unused = 0;
-	int total_count = 0;
 	struct free_slab *fs;
 //	int release = 1;
 
 	while ((fs = list_head(&freelist))) {
-		total_count++;
 		total += fs->slabsize;
 		list_remove(&freelist, fs);
 		/*

@@ -117,15 +117,15 @@ void *IOMallocAligned(vm_size_t size, vm_offset_t alignment);
 /*
  * Free memory
  */
-void IOFree(void *address, vm_size_t size);
-void IOFreeAligned(void * address, vm_size_t size);
+void IOFree(const void *address, vm_size_t size);
+void IOFreeAligned(const void *address, vm_size_t size);
 
 #endif /* _KERNEL */
 
 typedef int page_t;
 
 void *segkmem_alloc(vmem_t *vmp, size_t size, int vmflag);
-void segkmem_free(vmem_t *vmp, void *inaddr, size_t size);
+void segkmem_free(vmem_t *vmp, const void *inaddr, size_t size);
 
 /* Total memory held allocated */
 uint64_t segkmem_total_mem_allocated = 0;
@@ -212,7 +212,7 @@ osif_malloc(uint64_t size)
 }
 
 void
-osif_free(void *buf, uint64_t size)
+osif_free(const void *buf, uint64_t size)
 {
 #ifdef _KERNEL
 	IOFreeAligned(buf, size);
@@ -255,7 +255,7 @@ segkmem_alloc(vmem_t *vmp, size_t size, int maybe_unmasked_vmflag)
 }
 
 void
-segkmem_free(vmem_t *vmp, void *inaddr, size_t size)
+segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 {
 	osif_free(inaddr, size);
 	// since this is mainly called by spl_root_arena and free_arena,
