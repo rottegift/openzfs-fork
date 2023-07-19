@@ -1231,17 +1231,28 @@ void
 system_taskq_init(void)
 {
 #ifdef __APPLE__
+#if defined(__arm64__)
+	system_taskq = taskq_create_common("system_taskq", 0,
+	    system_taskq_size * (max_ncpus - 4), minclsyspri, 4, 512, &p0, 0,
+	    TASKQ_DYNAMIC | TASKQ_PREPOPULATE | TASKQ_REALLY_DYNAMIC);
+#else
 	system_taskq = taskq_create_common("system_taskq", 0,
 	    system_taskq_size * max_ncpus, minclsyspri, 4, 512, &p0, 0,
 	    TASKQ_DYNAMIC | TASKQ_PREPOPULATE | TASKQ_REALLY_DYNAMIC);
+#endif
 #else
 	system_taskq = taskq_create_common("system_taskq", 0,
 	    system_taskq_size * max_ncpus, minclsyspri, 4, 512, &p0, 0,
 	    TASKQ_DYNAMIC | TASKQ_PREPOPULATE);
 #endif
 
+#if defined(__arm64__) && defined(__APPLE__)
+	system_delay_taskq = taskq_create("system_delay_taskq", max_ncpus,
+	    minclsyspri, max_ncpus - 4, INT_MAX, TASKQ_PREPOPULATE);
+#else
 	system_delay_taskq = taskq_create("system_delay_taskq", max_ncpus,
 	    minclsyspri, max_ncpus, INT_MAX, TASKQ_PREPOPULATE);
+#endif
 
 	taskq_start_delay_thread();
 
@@ -1820,7 +1831,12 @@ taskq_thread_create(taskq_t *tq)
 	if (tq->tq_flags & TASKQ_THREADS_CPU_PCT) {
 #ifdef __APPLE__
 		mutex_enter(&tq->tq_lock);
+#if defined(__arm64__)
+		// assume 4 ecores
+		taskq_update_nthreads(tq, max_ncpus - 4);
+#else
 		taskq_update_nthreads(tq, max_ncpus);
+#endif
 		mutex_exit(&tq->tq_lock);
 #else
 		taskq_cpupct_install(tq, t->t_cpupart);
@@ -1914,8 +1930,13 @@ taskq_thread_set_cpulimit(taskq_t *tq)
 		 * do some scaled integer division to get
 		 * decpct = percent/(maxcpus/physcpus)
 		 */
-		const uint64_t m100 = (uint64_t)max_ncpus * 100ULL;
-		const uint64_t r100 = m100 / (MAX(max_ncpus/2, 1));
+#if defined(__arm64__)
+		const uint64_t numcpus = max_ncpus - 4;
+#else
+		const uint64_t numcpus = max_ncpus;
+#endif
+		const uint64_t m100 = (uint64_t)numcpus * 100ULL;
+		const uint64_t r100 = m100 / (MAX(numcpus/2, 1));
 		const uint64_t pct100 = inpercent * 100ULL;
 		const uint64_t decpct = pct100 / r100;
 		uint8_t percent = MIN(decpct, inpercent);
@@ -2397,7 +2418,11 @@ taskq_create_common(const char *name, int instance, int nthreads, pri_t pri,
 {
 	taskq_t *tq = kmem_cache_alloc(taskq_cache, KM_SLEEP);
 #ifdef __APPLE__
+#if defined(__arm64__)
+	uint_t ncpus = max_ncpus - 4;
+#else
 	uint_t ncpus = max_ncpus;
+#endif
 #else
 	uint_t ncpus = ((boot_max_ncpus == -1) ? max_ncpus : boot_max_ncpus);
 #endif
@@ -2466,7 +2491,11 @@ taskq_create_common(const char *name, int instance, int nthreads, pri_t pri,
 		/* ASSERT(curproc == proc || proc == &p0); */
 		tq->tq_threads_ncpus_pct = pct;
 		nthreads = 1;		/* corrected in taskq_thread_create() */
+#if defined(__arm64__) && defined(__APPLE__)
+		max_nthreads = TASKQ_THREADS_PCT((max_ncpus - 4), pct);
+#else
 		max_nthreads = TASKQ_THREADS_PCT(max_ncpus, pct);
+#endif
 
 	} else {
 		ASSERT3S(nthreads, >=, 1);
