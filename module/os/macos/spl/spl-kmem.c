@@ -2007,7 +2007,7 @@ kmem_dump_finish(char *buf, size_t size)
 	kmem_dumppr(&p, e, "heap size,%ld\n", kmem_dump_size);
 	kmem_dumppr(&p, e, "Oversize allocs,%d\n",
 	    kmem_dump_oversize_allocs);
-	kmem_dumppr(&p, e, "Oversize max size,%ld\n",
+	kmem_dumppr(&p, e, "Oversize max size,%u\n",
 	    kmem_dump_oversize_max);
 
 	for (kdi_idx = 0; kdi_idx < kdi_end; kdi_idx++) {

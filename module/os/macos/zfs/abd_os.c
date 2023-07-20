@@ -265,7 +265,7 @@ abd_free_chunks(abd_t *abd)
 
 	if (abd_cs < zfs_abd_chunk_size) {
 		VERIFY3U(abd->abd_size, <, zfs_abd_chunk_size);
-		VERIFY0(abd_cs % SPA_MINBLOCKSIZE);
+		VERIFY0(P2PHASE(abd_cs, SPA_MINBLOCKSIZE));
 
 		const int idx = abd_subpage_cache_index(abd_cs);
 
@@ -510,7 +510,7 @@ abd_get_offset_scatter(abd_t *abd, abd_t *sabd, size_t off, size_t size)
 	if (chunkcnt > 1) {
 		/* compare with legacy calculation of chunkcnt */
 		VERIFY3U(chunkcnt, ==, abd_chunkcnt_for_bytes(
-		    (new_offset % zfs_abd_chunk_size) + size));
+		    P2PHASE(new_offset, zfs_abd_chunk_size) + size));
 		/* EITHER subpage chunk (singular) or std chunks */
 		VERIFY3U(sabd_chunksz, ==, zfs_abd_chunk_size);
 	}
