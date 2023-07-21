@@ -701,6 +701,7 @@ vdev_disk_io_start(zio_t *zio)
 			VERIFY3U(taskq_dispatch(vdev_disk_taskq_asyncr,
 				vdev_disk_io_strategy,
 				zio, TQ_SLEEP), !=, 0);
+			return;
 		} else if (zio->io_priority == ZIO_PRIORITY_SCRUB) {
 			VERIFY3U(taskq_dispatch(vdev_disk_taskq_scrub,
 				vdev_disk_io_strategy,
@@ -816,27 +817,27 @@ vdev_disk_init(void)
 
 	vdev_disk_taskq_stack = taskq_create("vdev_disk_taskq_stack",
 	    1, defclsyspri, 1,
-	    INT_MAX, TASKQ_PREPOPULATE);
+	    INT_MAX, 0);
 
 	VERIFY(vdev_disk_taskq_stack);
 
 	vdev_disk_taskq_asyncw = taskq_create("vdev_disk_taskq_asyncw",
 	    75, defclsyspri - 4, cpus,
-	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+	    INT_MAX, 0);
 
 	VERIFY(vdev_disk_taskq_asyncw);
 
 	vdev_disk_taskq_asyncr = taskq_create("vdev_disk_taskq_asyncr",
 	    75, defclsyspri - 4, cpus,
-	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+	    INT_MAX, 0);
 
 	VERIFY(vdev_disk_taskq_asyncr);
 
 	int lowcpus = MAX(1, (cpus + 1) / 2);
 
 	vdev_disk_taskq_scrub = taskq_create("vdev_disk_taskq_scrub",
-	    50, minclsyspri, lowcpus,
-	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+	    lowcpus, minclsyspri, lowcpus,
+	    INT_MAX, 0);
 
 	VERIFY(vdev_disk_taskq_scrub);
 }
