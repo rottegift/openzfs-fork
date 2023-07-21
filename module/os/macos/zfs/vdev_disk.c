@@ -701,6 +701,7 @@ vdev_disk_io_start(zio_t *zio)
 			VERIFY3U(taskq_dispatch(vdev_disk_taskq_asyncr,
 				vdev_disk_io_strategy,
 				zio, TQ_SLEEP), !=, 0);
+			return;
 		} else if (zio->io_priority == ZIO_PRIORITY_SCRUB) {
 			VERIFY3U(taskq_dispatch(vdev_disk_taskq_scrub,
 				vdev_disk_io_strategy,
@@ -813,6 +814,11 @@ vdev_disk_init(void)
 #else
 	int cpus = max_ncpus;
 #endif
+
+	/*
+	 * keep vdev_disk_taskq_stack in-order, since we
+	 * do not know what type of ZIO it is when we use it
+	 */
 
 	vdev_disk_taskq_stack = taskq_create("vdev_disk_taskq_stack",
 	    1, defclsyspri, 1,
