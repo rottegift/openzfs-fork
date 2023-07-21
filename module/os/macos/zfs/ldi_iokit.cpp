@@ -1352,15 +1352,26 @@ buf_strategy_iokit(ldi_buf_t *lbp, struct ldi_handle *lhp)
 #if !defined(MAC_OS_X_VERSION_10_9) || \
   (MAC_OS_X_VERSION_MIN_REQUIRED > MAC_OS_X_VERSION_10_9)
 	/* Priority of I/O */
+	ioattr.priority = kIOStoragePriorityDefault;
+
+	/* higher priority is lower numerical value */
+
+	if (lbp->b_flags & B_ASYNC) {
+		ioattr.priority++;
+	}
+
+	if (lbp->b_flags & B_WRITE) {
+		ioattr.priority--;
+	}
+
 	if (lbp->b_flags & B_THROTTLED_IO) {
-		lbp->b_flags &= ~B_THROTTLED_IO;
-		ioattr.priority = kIOStoragePriorityBackground;
-		if (lbp->b_flags & B_WRITE)
-			ioattr.priority--;
-	} else if ((lbp->b_flags & B_ASYNC) == 0 || (lbp->b_flags & B_WRITE))
-		ioattr.priority = kIOStoragePriorityDefault - 1;
-	else
-		ioattr.priority = kIOStoragePriorityDefault;
+		ioattr.priority = kIOStoragePriorityLow;
+	}
+
+	if (lbp->b_flags & B_FUA) {
+		ioattr.priority = kIOStoragePriorityHigh;
+	}
+
 #endif
 
 	/*
