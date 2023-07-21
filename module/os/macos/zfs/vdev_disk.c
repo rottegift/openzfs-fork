@@ -822,7 +822,7 @@ vdev_disk_init(void)
 
 	vdev_disk_taskq_asyncw = taskq_create("vdev_disk_taskq_asyncw",
 	    75, defclsyspri - 4, cpus,
-	    INT_MAX, TASKQ_PREPOPULATE);
+	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
 
 	VERIFY(vdev_disk_taskq_asyncw);
 
