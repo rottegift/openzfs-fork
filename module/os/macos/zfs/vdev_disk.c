@@ -844,7 +844,7 @@ vdev_disk_init(void)
 	int lowcpus = MAX(1, (cpus + 1) / 2);
 
 	vdev_disk_taskq_scrub = taskq_create("vdev_disk_taskq_scrub",
-	    50, minclsyspri, lowcpus,
+	    50, minclsyspri - 1, lowcpus,
 	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
 
 	vdev_disk_taskq_default = taskq_create("vdev_disk_taskq_default",
