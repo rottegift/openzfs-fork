@@ -1813,6 +1813,29 @@ kmem_depot_ws_reap(kmem_cache_t *cp)
 	ASSERT(!list_link_active(&cp->cache_link) ||
 	    taskq_member(kmem_taskq, curthread));
 
+	/*
+	 * only one at a time please, or risks bad free panic in
+	 * vmem_hash_delete.   Standard way of doing this:
+	 * cmpxchg(v, expect_f, t) -> t == it's mine
+	 * cmpxchg(v, expect_f, t) -> f == it's someone else's
+	 *
+	 * instead of sleeping while waiting, we assume
+	 * the other holder will do useful reaping, so
+	 * we just return
+	 */
+
+	static _Atomic bool kmem_depot_ws_reap_lock = false;
+	bool f = false;
+
+	if (! __c11_atomic_compare_exchange_strong(
+		&kmem_depot_ws_reap_lock, &f, true,
+		__ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+		/* someone else is reaping, we're done */
+		printf("ZFS: SPL: %s:%s:%d: aborting\n",
+		    __FILE__, __func__, __LINE__);
+		return;
+	}
+
 	reap = MIN(cp->cache_full.ml_reaplimit, cp->cache_full.ml_min);
 	while (reap-- &&
 	    (mp = kmem_depot_alloc(cp, &cp->cache_full)) != NULL) {
@@ -1834,6 +1857,8 @@ kmem_depot_ws_reap(kmem_cache_t *cp)
 			bytes = 0;
 		}
 	}
+
+	kmem_depot_ws_reap_lock = false;
 }
 
 static void
