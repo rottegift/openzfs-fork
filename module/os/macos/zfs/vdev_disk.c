@@ -687,8 +687,8 @@ vdev_disk_io_start(zio_t *zio)
 
 	if (r < spl_split_stack_below) {
 		VERIFY3U(taskq_dispatch(vdev_disk_taskq_stack,
-			vdev_disk_io_strategy,
-			zio, TQ_SLEEP), !=, 0);
+		    vdev_disk_io_strategy,
+		    zio, TQ_SLEEP), !=, 0);
 		return;
 	}
 
@@ -700,21 +700,21 @@ vdev_disk_io_start(zio_t *zio)
 	if (zio->io_type == ZIO_TYPE_READ) {
 		if (zio->io_priority == ZIO_PRIORITY_ASYNC_READ) {
 			VERIFY3U(taskq_dispatch(vdev_disk_taskq_asyncr,
-				vdev_disk_io_strategy,
-				zio, TQ_SLEEP), !=, 0);
+			    vdev_disk_io_strategy,
+			    zio, TQ_SLEEP), !=, 0);
 			return;
 		} else if (zio->io_priority == ZIO_PRIORITY_SCRUB) {
 			VERIFY3U(taskq_dispatch(vdev_disk_taskq_scrub,
-				vdev_disk_io_strategy,
-				zio, TQ_SLEEP), !=, 0);
+			    vdev_disk_io_strategy,
+			    zio, TQ_SLEEP), !=, 0);
 			return;
 		}
 		/* fallthrough */
 	} else if (zio->io_type == ZIO_TYPE_WRITE) {
 		if (zio->io_priority == ZIO_PRIORITY_ASYNC_WRITE) {
 			VERIFY3U(taskq_dispatch(vdev_disk_taskq_asyncw,
-				vdev_disk_io_strategy,
-				zio, TQ_SLEEP), !=, 0);
+			    vdev_disk_io_strategy,
+			    zio, TQ_SLEEP), !=, 0);
 			return;
 		}
 		/* fallthrough */
@@ -722,8 +722,8 @@ vdev_disk_io_start(zio_t *zio)
 
 	/* default taskq for everything else */
 	VERIFY3U(taskq_dispatch(vdev_disk_taskq_default,
-		vdev_disk_io_strategy,
-		zio, TQ_SLEEP), !=, 0);
+	    vdev_disk_io_strategy,
+	    zio, TQ_SLEEP), !=, 0);
 }
 
 static void
@@ -844,7 +844,7 @@ vdev_disk_init(void)
 	int lowcpus = MAX(1, (cpus + 1) / 2);
 
 	vdev_disk_taskq_scrub = taskq_create("vdev_disk_taskq_scrub",
-	    50, minclsyspri - 1, lowcpus,
+	    50, dsl_scan_iss_syspri, lowcpus,
 	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
 
 	vdev_disk_taskq_default = taskq_create("vdev_disk_taskq_default",

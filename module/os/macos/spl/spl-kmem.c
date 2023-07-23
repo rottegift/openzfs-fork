@@ -1815,7 +1815,7 @@ kmem_depot_ws_reap(kmem_cache_t *cp)
 
 	bool mtx_contended = false;
 
-	if(!mutex_tryenter(&cp->cache_reap_lock)) {
+	if (!mutex_tryenter(&cp->cache_reap_lock)) {
 		mtx_contended = true;
 		printf("ZFS: SPL: %s:%s:%d: could not get lock\n",
 		    __FILE__, __func__, __LINE__);

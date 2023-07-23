@@ -2002,16 +2002,22 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	const thread_throughput_qos_t std_throughput = THROUGHPUT_QOS_TIER_1;
 	const thread_throughput_qos_t sysdc_throughput = THROUGHPUT_QOS_TIER_1;
 	const thread_throughput_qos_t batch_throughput = THROUGHPUT_QOS_TIER_2;
-	const thread_throughput_qos_t minpri_throughput = THROUGHPUT_QOS_TIER_5;
+	const thread_throughput_qos_t minpri_throughput = batch_throughput;
+	const thread_throughput_qos_t dsl_scan_iss_throughput =
+	    THROUGHPUT_QOS_TIER_5;
+
 	if (tq->tq_flags & TASKQ_DC_BATCH)
 		set_thread_throughput_named(thread,
 		    batch_throughput, tq->tq_name);
 	else if (tq->tq_flags & TASKQ_DUTY_CYCLE)
 		set_thread_throughput_named(thread,
 		    sysdc_throughput, tq->tq_name);
-	else if (pri <= minclsyspri)
+	else if (pri == minclsyspri)
 		set_thread_throughput_named(thread,
 		    minpri_throughput, tq->tq_name);
+	else if (pri < minclsyspri)
+		set_thread_throughput_named(thread,
+		    dsl_scan_iss_throughput, tq->tq_name);
 	else
 		set_thread_throughput_named(thread,
 		    std_throughput, tq->tq_name);
@@ -2023,14 +2029,18 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	 */
 	const thread_latency_qos_t batch_latency = LATENCY_QOS_TIER_3;
 	const thread_latency_qos_t std_latency = LATENCY_QOS_TIER_1;
-	const thread_latency_qos_t minpri_latency = LATENCY_QOS_TIER_3;
+	const thread_latency_qos_t minpri_latency = batch_latency;
+	const thread_latency_qos_t dsl_scan_iss_latency = LATENCY_QOS_TIER_5;
 
 	if (tq->tq_flags & TASKQ_DC_BATCH)
 		set_thread_latency_named(thread,
 		    batch_latency, tq->tq_name);
-	else if (pri <= minclsyspri)
+	else if (pri == minclsyspri)
 		set_thread_latency_named(thread,
 		    minpri_latency, tq->tq_name);
+	else if (pri < minclsyspri)
+		set_thread_latency_named(thread,
+		    dsl_scan_iss_latency, tq->tq_name);
 	else
 		set_thread_latency_named(thread,
 		    std_latency, tq->tq_name);
