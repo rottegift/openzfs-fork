@@ -1374,7 +1374,7 @@ buf_strategy_iokit(ldi_buf_t *lbp, struct ldi_handle *lhp)
 		 * equivalent here, but this requires further plumbing and
 		 * likely state about whether a device will error on FUA; for
 		 * now just prioritize the IO.  Anyway, ZIO & ZIL use
-		 * DKIOFLUSHWRITECACHE.
+		 * DKIOCFLUSHWRITECACHE.
 		 */
 		ioattr.priority = kIOStoragePriorityHigh;
 	}
