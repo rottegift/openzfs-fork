@@ -697,6 +697,7 @@ abd_iter_unmap(struct abd_iter *aiter)
 void
 abd_cache_reap_now(void)
 {
+#if 0
 	kmem_cache_reap_now(abd_chunk_cache);
 
 	const int step_size = SPA_MINBLOCKSIZE;
@@ -704,5 +705,5 @@ abd_cache_reap_now(void)
 		const int index = (bytes >> SPA_MINBLOCKSHIFT) - 1;
 		kmem_cache_reap_now(abd_subpage_cache[index]);
 	}
-
+#endif
 }
