@@ -2831,7 +2831,9 @@ kmem_reap_timeout(void *flag_arg)
 	uint32_t *flag = (uint32_t *)flag_arg;
 
 	ASSERT(flag == &kmem_reaping || flag == &kmem_reaping_idspace);
-	*flag = 0;
+	//*flag = 0;
+	__atomic_store_n(flag, 0, __ATOMIC_RELEASE);
+	ASSERT3U(*flag, ==, 0);
 }
 
 static void
@@ -2883,8 +2885,11 @@ kmem_reap_common(void *flag_arg)
 	 * So we start the reap going with a TQ_NOALLOC dispatch.  If the
 	 * dispatch fails, we reset the flag, and the next reap will try again.
 	 */
-	if (!taskq_dispatch(kmem_taskq, kmem_reap_start, flag, TQ_NOALLOC))
-		*flag = 0;
+	if (!taskq_dispatch(kmem_taskq, kmem_reap_start, flag, TQ_NOALLOC)) {
+		// *flag = 0;
+		__atomic_store_n(flag, 0, __ATOMIC_RELEASE);
+		ASSERT3U(*flag, ==, 0);
+	}
 }
 
 /*
