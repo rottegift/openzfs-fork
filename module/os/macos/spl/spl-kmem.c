@@ -2869,10 +2869,13 @@ kmem_reap_common(void *flag_arg)
 {
 	uint32_t *flag = (uint32_t *)flag_arg;
 
+	ASSERT(flag == &kmem_reaping || flag == &kmem_reaping_idspace);
 
+	/* If conditions are met, try to set flag to 1 */
 	if (MUTEX_HELD(&kmem_cache_lock) || kmem_taskq == NULL ||
 	    atomic_cas_32(flag, 0, 1) != 0)
 		return;
+	/* If we have not returned, flag is 1 */
 
 	/*
 	 * It may not be kosher to do memory allocation when a reap is called
@@ -2995,21 +2998,30 @@ kmem_cache_magazine_disable(kmem_cache_t *cp)
 boolean_t
 kmem_cache_reap_active(void)
 {
-	return (B_FALSE);
+	return (kmem_reaping);
 }
 
 /*
  * Reap (almost) everything right now.
+ *
+ * This function is over-called by common code and is not very safe against
+ * concurrencty.  Other ports have nerfed the function and likeiwse here we
+ * just fire off a global reap, which has its own concurrencty control, using
+ * the kmem_reaping flag.
+ *
  */
 void
-kmem_cache_reap_now(kmem_cache_t *cp)
+kmem_cache_reap_now(kmem_cache_t *cp __maybe_unused)
 {
 	ASSERT(list_link_active(&cp->cache_link));
-
+#if 0
 	kmem_depot_ws_zero(cp);
 
 	(void) taskq_dispatch(kmem_taskq,
 	    (task_func_t *)kmem_depot_ws_reap, cp, TQ_SLEEP);
+#else
+	kmem_reap();
+#endif
 }
 
 /*
