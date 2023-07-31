@@ -697,12 +697,20 @@ abd_iter_unmap(struct abd_iter *aiter)
 void
 abd_cache_reap_now(void)
 {
-	kmem_cache_reap_now(abd_chunk_cache);
-
-	const int step_size = SPA_MINBLOCKSIZE;
-	for (int bytes = step_size; bytes < ABD_PGSIZE; bytes += step_size) {
-		const int index = (bytes >> SPA_MINBLOCKSHIFT) - 1;
-		kmem_cache_reap_now(abd_subpage_cache[index]);
-	}
-
+	/*
+	 * This function is called by arc_kmem_reap_soon(), which also invokes
+	 * kmem_cache_reap_now() on several other kmem caches.
+	 *
+	 * kmem_cache_reap_now() now operates on all kmem caches at each
+	 * invocation (ignoring its kmem_cache_t argument except for an ASSERT
+	 * in DEBUG builds) by invoking kmem_reap().  Previously
+	 * kmem_cache_reap_now() would clearing the caches magazine working
+	 * set and starting a reap immediately and without regard to the
+	 * kmem_reaping compare-and-swap flag.
+	 *
+	 * Previously in this function we would call kmem_cache_reap_now() for
+	 * each of the abd_chunk and subpage kmem caches.  Now, since this
+	 * function is called after several kmem_cache_reap_now(), it
+	 * can be a noop.
+	 */
 }
