@@ -340,7 +340,7 @@ zfs_znode_hold_enter(zfsvfs_t *zfsvfs, uint64_t obj)
 		kmem_cache_free(znode_hold_cache, zh_new);
 
 	ASSERT(MUTEX_NOT_HELD(&zh->zh_lock));
-	//ASSERT3S(zfs_refcount_count(&zh->zh_refcount), >, 0);
+	// ASSERT3S(zfs_refcount_count(&zh->zh_refcount), >, 0);
 	mutex_enter(&zh->zh_lock);
 
 	return (zh);
