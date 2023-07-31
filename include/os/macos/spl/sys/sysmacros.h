@@ -90,6 +90,7 @@ extern "C" {
 
 extern unsigned int max_ncpus;
 #define	boot_ncpus max_ncpus
+extern unsigned int num_ecores;
 
 #ifndef RLIM64_INFINITY
 #define	RLIM64_INFINITY			(~0ULL)

@@ -812,11 +812,7 @@ vdev_ops_t vdev_disk_ops = {
 void
 vdev_disk_init(void)
 {
-#if defined(__arm64__)
-	int cpus = max_ncpus - 4;
-#else
-	int cpus = max_ncpus;
-#endif
+	int cpus = max_ncpus - num_ecores;
 
 	/*
 	 * keep vdev_disk_taskq_stack in-order, since we
