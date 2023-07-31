@@ -2831,7 +2831,8 @@ kmem_reap_timeout(void *flag_arg)
 	uint32_t *flag = (uint32_t *)flag_arg;
 
 	ASSERT(flag == &kmem_reaping || flag == &kmem_reaping_idspace);
-	*flag = 0;
+	__atomic_store_n(flag, 0, __ATOMIC_RELEASE);
+	ASSERT3U(*flag, ==, 0);
 }
 
 static void
@@ -2869,19 +2870,27 @@ kmem_reap_common(void *flag_arg)
 {
 	uint32_t *flag = (uint32_t *)flag_arg;
 
+	ASSERT(flag == &kmem_reaping || flag == &kmem_reaping_idspace);
 
+	/* If conditions are met, try to set flag to 1 */
 	if (MUTEX_HELD(&kmem_cache_lock) || kmem_taskq == NULL ||
 	    atomic_cas_32(flag, 0, 1) != 0)
 		return;
+	/*
+	 * If we are here, the appropriate flag is 1.  It will be atomically
+	 * zeroed after the reaping has finished and the timeout has expired.
+	 */
 
 	/*
-	 * It may not be kosher to do memory allocation when a reap is called
+	 * It may not be safe to do memory allocation when a reap
 	 * is called (for example, if vmem_populate() is in the call chain).
 	 * So we start the reap going with a TQ_NOALLOC dispatch.  If the
 	 * dispatch fails, we reset the flag, and the next reap will try again.
 	 */
-	if (!taskq_dispatch(kmem_taskq, kmem_reap_start, flag, TQ_NOALLOC))
-		*flag = 0;
+	if (!taskq_dispatch(kmem_taskq, kmem_reap_start, flag, TQ_NOALLOC)) {
+		__atomic_store_n(flag, 0, __ATOMIC_RELEASE);
+		ASSERT3U(*flag, ==, 0);
+	}
 }
 
 /*
@@ -2995,21 +3004,36 @@ kmem_cache_magazine_disable(kmem_cache_t *cp)
 boolean_t
 kmem_cache_reap_active(void)
 {
-	return (B_FALSE);
+	return (kmem_reaping);
 }
 
 /*
- * Reap (almost) everything right now.
+ * Fire off a kmem_reap(); that will put a kmem_reap_start() into the taskq if
+ * conditions are favourable.
+ *
+ * This function can be frequently called by common code.  Arguably it is
+ * over-called.
+ *
+ * Previously, a kmem_depot_ws_zero(cp) would erase the working set
+ * information of the kmem cache; it is probably better to let other events
+ * evolve the magazine working set.
+ *
+ * Also previously, a kmem_depot_ws_reap(cp) was dispatched on the kmem taskq.
+ * This appears to have some unsafeness with respect to concurrency, and this
+ * unconditional start-a-reap-right-now approach was abandoned by the other
+ * openzfs ports.  On macOS there does not seem to be an advantage in stepping
+ * around the kmem_reap{,common,start,timeout}() concurrency-controlling
+ * mechanism (atomic compare-and-swap on kmem_reaping, with an atomic set to
+ * zero after a delay once the reaping task is done).  Moreover, skipping the
+ * kmem_reaping flag check may have led to double-frees of destroyed depots to
+ * qcache-equipped vmem arenas.
  */
 void
-kmem_cache_reap_now(kmem_cache_t *cp)
+kmem_cache_reap_now(kmem_cache_t *cp __maybe_unused)
 {
 	ASSERT(list_link_active(&cp->cache_link));
 
-	kmem_depot_ws_zero(cp);
-
-	(void) taskq_dispatch(kmem_taskq,
-	    (task_func_t *)kmem_depot_ws_reap, cp, TQ_SLEEP);
+	kmem_reap();
 }
 
 /*
