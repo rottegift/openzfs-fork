@@ -1230,18 +1230,25 @@ taskq_mp_init(void)
 void
 system_taskq_init(void)
 {
-#ifdef __APPLE__
-	system_taskq = taskq_create_common("system_taskq", 0,
-	    system_taskq_size * max_ncpus, minclsyspri, 4, 512, &p0, 0,
-	    TASKQ_DYNAMIC | TASKQ_PREPOPULATE | TASKQ_REALLY_DYNAMIC);
-#else
-	system_taskq = taskq_create_common("system_taskq", 0,
-	    system_taskq_size * max_ncpus, minclsyspri, 4, 512, &p0, 0,
-	    TASKQ_DYNAMIC | TASKQ_PREPOPULATE);
-#endif
 
-	system_delay_taskq = taskq_create("system_delay_taskq", max_ncpus,
-	    minclsyspri, max_ncpus, INT_MAX, TASKQ_PREPOPULATE);
+	/*
+	 * We depart here from opensolaris:
+	 *
+	 * TASKQ_REALLY_DYNAMIC is an o3xism, since not everything can be
+	 * TASKQ_DYNAMIC and thus we eat that flag,
+	 * and we have differfent thread count parameters.
+	 *
+	 * old old spl used system_taskq_size * logical_ncpus
+	 */
+
+	system_taskq = taskq_create_common("system_taskq", 0,
+	    system_taskq_size * (max_ncpus - num_ecores),
+	    minclsyspri, 4, 512, &p0, 0,
+	    TASKQ_DYNAMIC | TASKQ_PREPOPULATE | TASKQ_REALLY_DYNAMIC);
+
+	system_delay_taskq = taskq_create("system_delay_taskq",
+	    max_ncpus - num_ecores, minclsyspri,
+	    max_ncpus - num_ecores, INT_MAX, TASKQ_PREPOPULATE);
 
 	taskq_start_delay_thread();
 
@@ -1820,7 +1827,7 @@ taskq_thread_create(taskq_t *tq)
 	if (tq->tq_flags & TASKQ_THREADS_CPU_PCT) {
 #ifdef __APPLE__
 		mutex_enter(&tq->tq_lock);
-		taskq_update_nthreads(tq, max_ncpus);
+		taskq_update_nthreads(tq, max_ncpus - num_ecores);
 		mutex_exit(&tq->tq_lock);
 #else
 		taskq_cpupct_install(tq, t->t_cpupart);
@@ -1914,8 +1921,9 @@ taskq_thread_set_cpulimit(taskq_t *tq)
 		 * do some scaled integer division to get
 		 * decpct = percent/(maxcpus/physcpus)
 		 */
-		const uint64_t m100 = (uint64_t)max_ncpus * 100ULL;
-		const uint64_t r100 = m100 / (MAX(max_ncpus/2, 1));
+		const uint64_t numcpus = max_ncpus - num_ecores;
+		const uint64_t m100 = (uint64_t)numcpus * 100ULL;
+		const uint64_t r100 = m100 / (MAX(numcpus/2, 1));
 		const uint64_t pct100 = inpercent * 100ULL;
 		const uint64_t decpct = pct100 / r100;
 		uint8_t percent = MIN(decpct, inpercent);
@@ -1981,12 +1989,22 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	const thread_throughput_qos_t std_throughput = THROUGHPUT_QOS_TIER_1;
 	const thread_throughput_qos_t sysdc_throughput = THROUGHPUT_QOS_TIER_1;
 	const thread_throughput_qos_t batch_throughput = THROUGHPUT_QOS_TIER_2;
+	const thread_throughput_qos_t minpri_throughput = batch_throughput;
+	const thread_throughput_qos_t dsl_scan_iss_throughput =
+	    THROUGHPUT_QOS_TIER_5;
+
 	if (tq->tq_flags & TASKQ_DC_BATCH)
 		set_thread_throughput_named(thread,
 		    batch_throughput, tq->tq_name);
 	else if (tq->tq_flags & TASKQ_DUTY_CYCLE)
 		set_thread_throughput_named(thread,
 		    sysdc_throughput, tq->tq_name);
+	else if (pri == minclsyspri)
+		set_thread_throughput_named(thread,
+		    minpri_throughput, tq->tq_name);
+	else if (pri < minclsyspri)
+		set_thread_throughput_named(thread,
+		    dsl_scan_iss_throughput, tq->tq_name);
 	else
 		set_thread_throughput_named(thread,
 		    std_throughput, tq->tq_name);
@@ -1998,10 +2016,18 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	 */
 	const thread_latency_qos_t batch_latency = LATENCY_QOS_TIER_3;
 	const thread_latency_qos_t std_latency = LATENCY_QOS_TIER_1;
+	const thread_latency_qos_t minpri_latency = batch_latency;
+	const thread_latency_qos_t dsl_scan_iss_latency = LATENCY_QOS_TIER_5;
 
 	if (tq->tq_flags & TASKQ_DC_BATCH)
 		set_thread_latency_named(thread,
 		    batch_latency, tq->tq_name);
+	else if (pri == minclsyspri)
+		set_thread_latency_named(thread,
+		    minpri_latency, tq->tq_name);
+	else if (pri < minclsyspri)
+		set_thread_latency_named(thread,
+		    dsl_scan_iss_latency, tq->tq_name);
 	else
 		set_thread_latency_named(thread,
 		    std_latency, tq->tq_name);
@@ -2397,7 +2423,7 @@ taskq_create_common(const char *name, int instance, int nthreads, pri_t pri,
 {
 	taskq_t *tq = kmem_cache_alloc(taskq_cache, KM_SLEEP);
 #ifdef __APPLE__
-	uint_t ncpus = max_ncpus;
+	uint_t ncpus = max_ncpus - num_ecores;
 #else
 	uint_t ncpus = ((boot_max_ncpus == -1) ? max_ncpus : boot_max_ncpus);
 #endif
@@ -2466,8 +2492,7 @@ taskq_create_common(const char *name, int instance, int nthreads, pri_t pri,
 		/* ASSERT(curproc == proc || proc == &p0); */
 		tq->tq_threads_ncpus_pct = pct;
 		nthreads = 1;		/* corrected in taskq_thread_create() */
-		max_nthreads = TASKQ_THREADS_PCT(max_ncpus, pct);
-
+		max_nthreads = TASKQ_THREADS_PCT((max_ncpus - num_ecores), pct);
 	} else {
 		ASSERT3S(nthreads, >=, 1);
 		max_nthreads = nthreads;

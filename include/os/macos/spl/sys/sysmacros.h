@@ -90,6 +90,7 @@ extern "C" {
 
 extern unsigned int max_ncpus;
 #define	boot_ncpus max_ncpus
+extern unsigned int num_ecores;
 
 #ifndef RLIM64_INFINITY
 #define	RLIM64_INFINITY			(~0ULL)
@@ -113,6 +114,7 @@ extern unsigned int max_ncpus;
 #define	minclsyspri  70 /* well below the render server and other graphics */
 #define	defclsyspri  75 /* five below the xnu kernel services */
 #define	maxclsyspri  80 /* 1 less than base, 2 less than networking */
+#define	dsl_scan_iss_syspri	(minclsyspri - 1)
 
 /*
  * Missing macros

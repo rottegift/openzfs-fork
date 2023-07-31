@@ -43,7 +43,13 @@
  * Virtual device vector for disks.
  */
 
-static taskq_t *vdev_disk_taskq;
+
+static taskq_t *vdev_disk_taskq_asyncr;
+static taskq_t *vdev_disk_taskq_asyncw;
+static taskq_t *vdev_disk_taskq_default;
+static taskq_t *vdev_disk_taskq_scrub;
+static taskq_t *vdev_disk_taskq_stack;
+
 _Atomic unsigned int spl_lowest_vdev_disk_stack_remaining = UINT_MAX;
 
 /* XXX leave extern if declared elsewhere - originally was in zfs_ioctl.c */
@@ -536,10 +542,20 @@ vdev_disk_io_strategy(void *arg)
 		break;
 
 	case ZIO_TYPE_READ:
-		if (zio->io_priority == ZIO_PRIORITY_SYNC_READ)
+		if (zio->io_priority == ZIO_PRIORITY_SYNC_READ) {
 			flags = B_READ;
-		else
+		} else if (zio->io_priority == ZIO_PRIORITY_SCRUB) {
+			/*
+			 *  Signal using  B_THROTTLED_IO.
+			 *  This is safe because our path through
+			 *  IOKit doesn't really use these flags and
+			 *  the flag is valid but depracted in the
+			 *  vnode path.
+			 */
+			flags = B_READ | B_ASYNC | B_THROTTLED_IO;
+		} else {
 			flags = B_READ | B_ASYNC;
+		}
 
 		bp->b_un.b_addr =
 		    abd_borrow_buf(zio->io_abd, zio->io_size);
@@ -662,8 +678,7 @@ vdev_disk_io_start(zio_t *zio)
 
 	/*
 	 * Check stack remaining, record lowest.  If below
-	 * threshold start IO on taskq, otherwise on this
-	 * thread.
+	 * threshold start IO on vdev_disk_taskq_stack.
 	 */
 	const vm_offset_t r = OSKernelStackRemaining();
 
@@ -671,11 +686,44 @@ vdev_disk_io_start(zio_t *zio)
 		spl_lowest_vdev_disk_stack_remaining = r;
 
 	if (r < spl_split_stack_below) {
-		VERIFY3U(taskq_dispatch(vdev_disk_taskq, vdev_disk_io_strategy,
+		VERIFY3U(taskq_dispatch(vdev_disk_taskq_stack,
+		    vdev_disk_io_strategy,
 		    zio, TQ_SLEEP), !=, 0);
 		return;
 	}
-	vdev_disk_io_strategy(zio);
+
+	/*
+	 * dispatch async or scrub reads on appropriate taskq,
+	 * dispatch async writes on appropriate taskq,
+	 * do everything else on this thread
+	 */
+	if (zio->io_type == ZIO_TYPE_READ) {
+		if (zio->io_priority == ZIO_PRIORITY_ASYNC_READ) {
+			VERIFY3U(taskq_dispatch(vdev_disk_taskq_asyncr,
+			    vdev_disk_io_strategy,
+			    zio, TQ_SLEEP), !=, 0);
+			return;
+		} else if (zio->io_priority == ZIO_PRIORITY_SCRUB) {
+			VERIFY3U(taskq_dispatch(vdev_disk_taskq_scrub,
+			    vdev_disk_io_strategy,
+			    zio, TQ_SLEEP), !=, 0);
+			return;
+		}
+		/* fallthrough */
+	} else if (zio->io_type == ZIO_TYPE_WRITE) {
+		if (zio->io_priority == ZIO_PRIORITY_ASYNC_WRITE) {
+			VERIFY3U(taskq_dispatch(vdev_disk_taskq_asyncw,
+			    vdev_disk_io_strategy,
+			    zio, TQ_SLEEP), !=, 0);
+			return;
+		}
+		/* fallthrough */
+	}
+
+	/* default taskq for everything else */
+	VERIFY3U(taskq_dispatch(vdev_disk_taskq_default,
+	    vdev_disk_io_strategy,
+	    zio, TQ_SLEEP), !=, 0);
 }
 
 static void
@@ -764,16 +812,53 @@ vdev_ops_t vdev_disk_ops = {
 void
 vdev_disk_init(void)
 {
-	vdev_disk_taskq = taskq_create("vdev_disk_taskq", 100, minclsyspri,
-	    max_ncpus, INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+	int cpus = max_ncpus - num_ecores;
 
-	VERIFY(vdev_disk_taskq);
+	/*
+	 * keep vdev_disk_taskq_stack in-order, since we
+	 * do not know what type of ZIO it is when we use it
+	 */
+
+	vdev_disk_taskq_stack = taskq_create("vdev_disk_taskq_stack",
+	    1, defclsyspri, 1,
+	    INT_MAX, TASKQ_PREPOPULATE);
+
+	VERIFY(vdev_disk_taskq_stack);
+
+	vdev_disk_taskq_asyncw = taskq_create("vdev_disk_taskq_asyncw",
+	    75, defclsyspri - 4, cpus,
+	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+
+	VERIFY(vdev_disk_taskq_asyncw);
+
+	vdev_disk_taskq_asyncr = taskq_create("vdev_disk_taskq_asyncr",
+	    75, defclsyspri - 4, cpus,
+	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+
+	VERIFY(vdev_disk_taskq_asyncr);
+
+	int lowcpus = MAX(1, (cpus + 1) / 2);
+
+	vdev_disk_taskq_scrub = taskq_create("vdev_disk_taskq_scrub",
+	    50, dsl_scan_iss_syspri, lowcpus,
+	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+
+	VERIFY(vdev_disk_taskq_scrub);
+
+	vdev_disk_taskq_default = taskq_create("vdev_disk_taskq_default",
+	    50, defclsyspri, cpus,
+	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+
+	VERIFY(vdev_disk_taskq_default);
 }
 
 void
 vdev_disk_fini(void)
 {
-	taskq_destroy(vdev_disk_taskq);
+	taskq_destroy(vdev_disk_taskq_scrub);
+	taskq_destroy(vdev_disk_taskq_asyncr);
+	taskq_destroy(vdev_disk_taskq_asyncw);
+	taskq_destroy(vdev_disk_taskq_stack);
 }
 
 /*
