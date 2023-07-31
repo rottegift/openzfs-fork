@@ -567,7 +567,7 @@ arc_os_init(void)
 	arc_reclaim_thread_exit = B_FALSE;
 
 	(void) thread_create(NULL, 0, arc_reclaim_thread, NULL, 0, &p0,
-	    TS_RUN, minclsyspri);
+	    TS_RUN, minclsyspri + 1);
 
 	arc_warm = B_FALSE;
 
