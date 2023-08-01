@@ -388,9 +388,9 @@ abd_init(void)
 	 * flags require the definitions from <sys/kmem_impl.h>
 	 */
 	// const int cflags = KMF_BUFTAG | KMF_LITE;
-	const int cflags = KMC_NOTOUCH;
+	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
 #else
-	const int cflags = KMC_NOTOUCH;
+	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
 #endif
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
