@@ -4265,7 +4265,6 @@ kmem_cache_build_slablist(kmem_cache_t *cp)
 		list_insert_tail(&freelist, fs);
 	}
 
-
 	kstat_delete(cp->cache_kstat);
 
 	if (cp->cache_hash_table != NULL)
