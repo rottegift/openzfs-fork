@@ -404,7 +404,6 @@ abd_init(void)
 	/* check if we guessed ABD_PGSIZE correctly */
 	ASSERT3U(ABD_PGSIZE, ==, PAGE_SIZE);
 
-#ifdef DEBUG
 	/*
 	 * KMF_BUFTAG | KMF_LITE on the abd kmem_caches causes them to waste
 	 * up to 50% of their memory for redzone.  Even in DEBUG builds this
@@ -416,11 +415,8 @@ abd_init(void)
 	 */
 	// const int cflags = KMF_BUFTAG | KMF_LITE;
 	// const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
-	const int cflags = KMF_AUDIT | KMC_ARENA_SLAB | KMF_HASH | KMF_CONTENTS;
-#else
 	// const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
-	const int cflags = KMF_AUDIT | KMC_ARENA_SLAB | KMF_HASH | KMF_CONTENTS;
-#endif
+	const int cflags = KMF_BUFTAG | KMC_ARENA_SLAB | KMF_HASH;
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
 	    ABD_PGSIZE,
