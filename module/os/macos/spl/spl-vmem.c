@@ -1731,6 +1731,7 @@ do_alloc:
 
 #ifndef SMDREMOVEME
 void vm_yfree(vmem_t *, const void *, size_t, const char *);
+
 void
 vmem_yfree(vmem_t *vmp, const void *vaddr, size_t size, const char *name)
 {
@@ -2112,7 +2113,7 @@ wrapped_vmem_alloc_impl(vmem_t *vmp, size_t size, int vmflag)
 
 #ifdef SMDREMOVEME
 void
-vmem_free_impl(vmem_t *vmp, const void *vaddr, size_t size, const char *name)
+vmem_yfree_impl(vmem_t *vmp, const void *vaddr, size_t size, const char *name)
 {
 	if (size - 1 < vmp->vm_qcache_max)
 		kmem_cache_free(vmp->vm_qcache[(size - 1) >> vmp->vm_qshift],
