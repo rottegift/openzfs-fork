@@ -416,7 +416,7 @@ abd_init(void)
 	// const int cflags = KMF_BUFTAG | KMF_LITE;
 	// const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
 	// const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
-	const int cflags = KMF_BUFTAG | KMC_ARENA_SLAB | KMF_HASH;
+	const int cflags = KMF_BUFTAG | KMF_HASH;
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
 	    ABD_PGSIZE,
@@ -463,7 +463,7 @@ abd_init(void)
 		VERIFY3S(index, <, SUBPAGE_CACHE_AFTER_MAX_INDEX);
 
 		abd_subpage_cache[index] =
-		    kmem_cache_create(name, bytes, 512,
+		    kmem_cache_create(name, bytes, sizeof (void *),
 		    NULL, NULL, NULL, NULL, abd_subpage_arena, cflags);
 
 		VERIFY3P(abd_subpage_cache[index], !=, NULL);
