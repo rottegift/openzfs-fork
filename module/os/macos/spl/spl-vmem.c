@@ -1690,6 +1690,63 @@ do_alloc:
  * allocation.  vmem_xalloc() and vmem_xfree() must always be paired because
  * both routines bypass the quantum caches.
  */
+
+#ifndef SMDREMOVEME
+void vm_yfree(vmem_t *, const void *, size_t);
+void
+vmem_yfree(vmem_t *vmp, const void *vaddr, size_t size)
+{
+	vmem_seg_t *vsp, *vnext, *vprev;
+
+	mutex_enter(&vmp->vm_lock);
+
+	vsp = vmem_hash_delete(vmp, (uintptr_t)vaddr, size);
+	vsp->vs_end = P2ROUNDUP(vsp->vs_end, vmp->vm_quantum);
+
+	/*
+	 * Attempt to coalesce with the next segment.
+	 */
+	vnext = vsp->vs_anext;
+	if (vnext->vs_type == VMEM_FREE) {
+		ASSERT(vsp->vs_end == vnext->vs_start);
+		vmem_freelist_delete(vmp, vnext);
+		vsp->vs_end = vnext->vs_end;
+		vmem_seg_destroy(vmp, vnext);
+	}
+
+	/*
+	 * Attempt to coalesce with the previous segment.
+	 */
+	vprev = vsp->vs_aprev;
+	if (vprev->vs_type == VMEM_FREE) {
+		ASSERT(vprev->vs_end == vsp->vs_start);
+		vmem_freelist_delete(vmp, vprev);
+		vprev->vs_end = vsp->vs_end;
+		vmem_seg_destroy(vmp, vsp);
+		vsp = vprev;
+	}
+
+	/*
+	 * If the entire span is free, return it to the source.
+	 */
+	if (vsp->vs_aprev->vs_import && vmp->vm_source_free != NULL &&
+	    vsp->vs_aprev->vs_type == VMEM_SPAN &&
+	    vsp->vs_anext->vs_type == VMEM_SPAN) {
+		vaddr = (void *)vsp->vs_start;
+		size = VS_SIZE(vsp);
+		ASSERT(size == VS_SIZE(vsp->vs_aprev));
+		vmem_span_destroy(vmp, vsp);
+		vmp->vm_kstat.vk_parent_free.value.ui64++;
+		mutex_exit(&vmp->vm_lock);
+		vmp->vm_source_free(vmp->vm_source,
+		    __DECONST(void *, vaddr), size);
+	} else {
+		vmem_freelist_insert(vmp, vsp);
+		mutex_exit(&vmp->vm_lock);
+	}
+}
+#endif
+
 void
 vmem_xfree(vmem_t *vmp, const void *vaddr, size_t size)
 {

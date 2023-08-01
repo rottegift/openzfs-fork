@@ -1077,7 +1077,8 @@ kmem_log_fini(kmem_log_header_t *lhp)
 	mutex_destroy(&lhp->lh_lock);
 
 	lhsize = P2ROUNDUP(lhsize, KMEM_ALIGN);
-	vmem_xfree(kmem_log_arena, lhp, lhsize);
+	extern void vmem_yfree(vmem_t *, const void *, size_t);
+	vmem_yfree(kmem_log_arena, lhp, lhsize);
 }
 
 
