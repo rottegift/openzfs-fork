@@ -799,6 +799,9 @@ vmem_hash_ydelete(vmem_t *vmp, uintptr_t addr, size_t size, const char *name)
 	vmem_seg_t *vsp, **prev_vspp;
 
 	prev_vspp = VMEM_HASH(vmp, addr);
+
+	const vmem_seg_t *pvsp = *prev_vspp;
+
 	while ((vsp = *prev_vspp) != NULL) {
 		if (vsp->vs_start == addr) {
 			*prev_vspp = vsp->vs_knext;
@@ -810,8 +813,9 @@ vmem_hash_ydelete(vmem_t *vmp, uintptr_t addr, size_t size, const char *name)
 
 	if (vsp == NULL)
 		panic("vmem_hash_delete(%p, %lx, %lu): bad free "
-		    "(name: %s, addr, size), cache: %s",
-		    (void *)vmp, addr, size, vmp->vm_name, name);
+		    "(name: %s, addr, size), cache: %s, pvspp? %s",
+		    (void *)vmp, addr, size, vmp->vm_name, name,
+		    (pvsp == NULL) ? "NULL" : "not null");
 	if (VS_SIZE(vsp) != size)
 		panic("vmem_hash_delete(%p, %lx, %lu): (%s) wrong size"
 		    "(expect %lu)",
@@ -831,6 +835,7 @@ vmem_hash_delete(vmem_t *vmp, uintptr_t addr, size_t size)
 	vmem_seg_t *vsp, **prev_vspp;
 
 	prev_vspp = VMEM_HASH(vmp, addr);
+
 	while ((vsp = *prev_vspp) != NULL) {
 		if (vsp->vs_start == addr) {
 			*prev_vspp = vsp->vs_knext;
