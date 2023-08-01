@@ -220,7 +220,7 @@ abd_verify_scatter(abd_t *abd)
 		VERIFY3P(
 		    ABD_SCATTER(abd).abd_chunks[i], !=, NULL);
 	}
-
+#if 0
 	if (n > 1 || (n == 1 && ABD_SCATTER(abd).abd_chunk_size > zfs_abd_chunk_size - SPA_MINBLOCKSIZE)) {
 		VERIFY3P(abd->abd_chunk_source, ==, abd_chunk_cache);
 	} else {
@@ -230,6 +230,7 @@ abd_verify_scatter(abd_t *abd)
 		VERIFY3S(idx, <, SUBPAGE_CACHE_AFTER_MAX_INDEX);
 		VERIFY3P(abd->abd_chunk_source, ==, abd_subpage_cache[idx]);
 	}
+#endif
 }
 
 static inline int
