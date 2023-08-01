@@ -247,6 +247,8 @@ abd_alloc_chunks(abd_t *abd, size_t size)
 		const uint_t s = abd_subpage_enclosing_size(i);
 		VERIFY3U(s, >=, size);
 		VERIFY3U(s, <, zfs_abd_chunk_size);
+		VERIFY3P(abd->abd_chunk_source, ==, NULL);
+		abd->abd_chunk_source = abd_subpage_cache[i];
 		void *c = kmem_cache_alloc(abd_subpage_cache[i], KM_SLEEP);
 		ABD_SCATTER(abd).abd_chunks[0] = c;
 		ABD_SCATTER(abd).abd_chunk_size = s;
@@ -254,6 +256,8 @@ abd_alloc_chunks(abd_t *abd, size_t size)
 		const size_t n = abd_chunkcnt_for_bytes(size);
 
 		for (int i = 0; i < n; i++) {
+			VERIFY3P(abd->abd_chunk_source, ==, NULL);
+			abd->abd_chunk_source = abd_chunk_cache;
 			void *c = kmem_cache_alloc(abd_chunk_cache, KM_SLEEP);
 			ABD_SCATTER(abd).abd_chunks[i] = c;
 		}
@@ -273,13 +277,17 @@ abd_free_chunks(abd_t *abd)
 		const int idx = abd_subpage_cache_index(abd_cs);
 		VERIFY3S(idx, >=, 0);
 		VERIFY3S(idx, <, SUBPAGE_CACHE_AFTER_MAX_INDEX);
+		VERIFY3P(abd->abd_chunk_source, ==, abd_subpage_cache[idx]);
 		kmem_cache_free(abd_subpage_cache[idx],
 		    ABD_SCATTER(abd).abd_chunks[0]);
+		abd->abd_chunk_source = NULL;
 	} else {
+		VERIFY3P(abd->abd_chunk_source, ==, abd_chunk_cache);
 		const size_t n = abd_scatter_chunkcnt(abd);
 		for (int i = 0; i < n; i++) {
 			abd_free_chunk(ABD_SCATTER(abd).abd_chunks[i]);
 		}
+		abd->abd_chunk_source = NULL;
 	}
 }
 

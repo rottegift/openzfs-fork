@@ -56,6 +56,7 @@ typedef struct abd {
 	struct abd	*abd_parent;
 	zfs_refcount_t	abd_children;
 #endif
+	kmem_cache_t	*abd_chunk_source;
 	kmutex_t	abd_mtx;
 	union {
 		struct abd_scatter {
