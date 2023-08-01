@@ -802,6 +802,8 @@ vmem_hash_ydelete(vmem_t *vmp, uintptr_t addr, size_t size, const char *name)
 
 	const vmem_seg_t *pvsp = *prev_vspp;
 
+	VERIFY3P(pvsp, !=, NULL);
+
 	while ((vsp = *prev_vspp) != NULL) {
 		if (vsp->vs_start == addr) {
 			*prev_vspp = vsp->vs_knext;
