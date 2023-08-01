@@ -419,7 +419,7 @@ abd_init(void)
 	const int cflags = KMC_ARENA_SLAB;
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
-	    sizeof (void *),
+	    ABD_PGSIZE,
 	    NULL, NULL, NULL, NULL, abd_arena, cflags);
 
 	wmsum_init(&abd_sums.abdstat_struct_size, 0);
@@ -462,9 +462,11 @@ abd_init(void)
 		VERIFY3S(index, >=, 0);
 		VERIFY3S(index, <, SUBPAGE_CACHE_AFTER_MAX_INDEX);
 
+		const int csubflags = KMF_LITE;
+
 		abd_subpage_cache[index] =
 		    kmem_cache_create(name, bytes, sizeof (void *),
-		    NULL, NULL, NULL, NULL, abd_subpage_arena, cflags);
+		    NULL, NULL, NULL, NULL, abd_subpage_arena, csubflags);
 
 		VERIFY3P(abd_subpage_cache[index], !=, NULL);
 	}
