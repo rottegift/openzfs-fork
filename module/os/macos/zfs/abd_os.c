@@ -263,7 +263,7 @@ abd_free_chunks(abd_t *abd)
 {
 	const uint_t abd_cs = ABD_SCATTER(abd).abd_chunk_size;
 
-	if (abd_cs < zfs_abd_chunk_size) {
+	if (abd_cs <= (zfs_abd_chunk_size - SPA_MINBLOCKSIZE)) {
 		VERIFY3U(abd->abd_size, <, zfs_abd_chunk_size);
 		VERIFY0(P2PHASE(abd_cs, SPA_MINBLOCKSIZE));
 
