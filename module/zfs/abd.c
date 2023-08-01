@@ -108,7 +108,6 @@ int zfs_abd_scatter_enabled = B_TRUE;
 void
 abd_verify(abd_t *abd)
 {
-#ifdef ZFS_DEBUG
 	ASSERT3U(abd->abd_size, <=, SPA_MAXBLOCKSIZE);
 	ASSERT3U(abd->abd_flags, ==, abd->abd_flags & (ABD_FLAG_LINEAR |
 	    ABD_FLAG_OWNER | ABD_FLAG_META | ABD_FLAG_MULTI_ZONE |
@@ -133,7 +132,6 @@ abd_verify(abd_t *abd)
 		ASSERT3U(abd->abd_size, >, 0);
 		abd_verify_scatter(abd);
 	}
-#endif
 }
 
 static void
