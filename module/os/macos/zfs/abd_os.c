@@ -33,6 +33,7 @@
 #include <sys/zio.h>
 #include <sys/zfs_context.h>
 #include <sys/zfs_znode.h>
+#include <sys/kmem_impl.h>
 
 typedef struct abd_stats {
 	kstat_named_t abdstat_struct_size;
@@ -402,9 +403,11 @@ abd_init(void)
 	 * flags require the definitions from <sys/kmem_impl.h>
 	 */
 	// const int cflags = KMF_BUFTAG | KMF_LITE;
-	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
+	// const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
+	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB | KMF_AUDIT;
 #else
-	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
+	// const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
+	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB | KMF_AUDIT;
 #endif
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
