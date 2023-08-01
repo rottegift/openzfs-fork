@@ -298,7 +298,7 @@ segkmem_abd_init()
 #endif
 
 	abd_arena = vmem_create("abd_cache", NULL, 0,
-	    PAGESIZE, vmem_alloc_impl, vmem_free_impl, spl_heap_arena,
+	    sizeof (void *), vmem_alloc_impl, vmem_free_impl, spl_heap_arena,
 	    BIG_BIG_SLAB, VM_SLEEP | VMC_NO_QCACHE);
 
 	VERIFY3P(abd_arena, !=, NULL);
