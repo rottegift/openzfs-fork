@@ -416,10 +416,10 @@ abd_init(void)
 	 */
 	// const int cflags = KMF_BUFTAG | KMF_LITE;
 	// const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
-	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB | KMF_AUDIT;
+	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB | KMF_AUDIT | KMF_HASH;
 #else
 	// const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB;
-	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB | KMF_AUDIT;
+	const int cflags = KMC_NOTOUCH | KMC_ARENA_SLAB | KMF_AUDIT | KMF_HASH;
 #endif
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
