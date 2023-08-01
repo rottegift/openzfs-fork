@@ -419,7 +419,7 @@ abd_init(void)
 	const int cflags = KMC_ARENA_SLAB | KMF_HASH;
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
-	    ABD_PGSIZE,
+	    sizeof (void *),
 	    NULL, NULL, NULL, NULL, abd_arena, cflags);
 
 	wmsum_init(&abd_sums.abdstat_struct_size, 0);
