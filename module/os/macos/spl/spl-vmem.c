@@ -787,6 +787,44 @@ vmem_hash_insert(vmem_t *vmp, vmem_seg_t *vsp)
 /*
  * Remove vsp from the allocated-segment hash table and update kstats.
  */
+
+#ifndef SMDREMOVEME
+
+static vmem_seg_t *vmem_hash_ydelete(vmem_t *,
+    uintptr_t, size_t, const char *);
+
+static vmem_seg_t *
+vmem_hash_ydelete(vmem_t *vmp, uintptr_t addr, size_t size, const char *name)
+{
+	vmem_seg_t *vsp, **prev_vspp;
+
+	prev_vspp = VMEM_HASH(vmp, addr);
+	while ((vsp = *prev_vspp) != NULL) {
+		if (vsp->vs_start == addr) {
+			*prev_vspp = vsp->vs_knext;
+			break;
+		}
+		vmp->vm_kstat.vk_lookup.value.ui64++;
+		prev_vspp = &vsp->vs_knext;
+	}
+
+	if (vsp == NULL)
+		panic("vmem_hash_delete(%p, %lx, %lu): bad free "
+		    "(name: %s, addr, size), cache: %s",
+		    (void *)vmp, addr, size, vmp->vm_name, name);
+	if (VS_SIZE(vsp) != size)
+		panic("vmem_hash_delete(%p, %lx, %lu): (%s) wrong size"
+		    "(expect %lu)",
+		    (void *)vmp, addr, size, vmp->vm_name, VS_SIZE(vsp));
+
+	vmp->vm_kstat.vk_free.value.ui64++;
+	vmp->vm_kstat.vk_mem_inuse.value.ui64 -= size;
+
+	return (vsp);
+}
+
+#endif
+
 static vmem_seg_t *
 vmem_hash_delete(vmem_t *vmp, uintptr_t addr, size_t size)
 {
@@ -1700,7 +1738,7 @@ vmem_yfree(vmem_t *vmp, const void *vaddr, size_t size, const char *name)
 
 	mutex_enter(&vmp->vm_lock);
 
-	vsp = vmem_hash_delete(vmp, (uintptr_t)vaddr, size);
+	vsp = vmem_hash_ydelete(vmp, (uintptr_t)vaddr, size, name);
 	vsp->vs_end = P2ROUNDUP(vsp->vs_end, vmp->vm_quantum);
 
 	/*
