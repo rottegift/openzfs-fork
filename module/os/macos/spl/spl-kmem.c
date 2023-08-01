@@ -1077,8 +1077,7 @@ kmem_log_fini(kmem_log_header_t *lhp)
 	mutex_destroy(&lhp->lh_lock);
 
 	lhsize = P2ROUNDUP(lhsize, KMEM_ALIGN);
-	extern void vmem_yfree(vmem_t *, const void *, size_t);
-	vmem_yfree(kmem_log_arena, lhp, lhsize);
+	vmem_xfree(kmem_log_arena, lhp, lhsize);
 }
 
 
@@ -1274,7 +1273,10 @@ kmem_slab_destroy(kmem_cache_t *cp, kmem_slab_t *sp)
 		}
 		kmem_cache_free(kmem_slab_cache, sp);
 	}
-	vmem_free_impl(vmp, slab, cp->cache_slabsize);
+	extern void vmem_yfree_impl(vmem_t *,
+	    const void *, size_t, const char *);
+	vmem_yfree_impl(vmp, slab, cp->cache_slabsize,
+	    cp->cache_name);
 }
 
 static void *
