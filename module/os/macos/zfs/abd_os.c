@@ -121,7 +121,8 @@ _Static_assert(ABD_PGSIZE >= 4096, "ABD_PGSIZE unexpectedly smaller than 4096");
 _Static_assert(ABD_PGSIZE <= 16384,
 	"ABD_PGSIZE unexpectedly larger than 16384");
 
-kmem_cache_t *abd_subpage_cache[ABD_PGSIZE >> SPA_MINBLOCKSHIFT] = { NULL };
+#define	SUBPAGE_CACHE_AFTER_MAX_INDEX (ABD_PGSIZE >> SPA_MINBLOCKSHIFT)
+kmem_cache_t *abd_subpage_cache[SUBPAGE_CACHE_AFTER_MAX_INDEX] = { NULL };
 
 /*
  * We use a scattered SPA_MAXBLOCKSIZE sized ABD whose chunks are
@@ -241,6 +242,8 @@ abd_alloc_chunks(abd_t *abd, size_t size)
 	VERIFY3U(size, >, 0);
 	if (size <= (zfs_abd_chunk_size - SPA_MINBLOCKSIZE)) {
 		const int i = abd_subpage_cache_index(size);
+		VERIFY3S(i, >=, 0);
+		VERIFY3S(i, <, SUBPAGE_CACHE_AFTER_MAX_INDEX);
 		const uint_t s = abd_subpage_enclosing_size(i);
 		VERIFY3U(s, >=, size);
 		VERIFY3U(s, <, zfs_abd_chunk_size);
@@ -268,7 +271,8 @@ abd_free_chunks(abd_t *abd)
 		VERIFY0(P2PHASE(abd_cs, SPA_MINBLOCKSIZE));
 
 		const int idx = abd_subpage_cache_index(abd_cs);
-
+		VERIFY3S(idx, >=, 0);
+		VERIFY3S(idx, <, SUBPAGE_CACHE_AFTER_MAX_INDEX);
 		kmem_cache_free(abd_subpage_cache[idx],
 		    ABD_SCATTER(abd).abd_chunks[0]);
 	} else {
@@ -434,8 +438,8 @@ abd_init(void)
 		    "abd_subpage_%lu", (ulong_t)bytes);
 
 		const int index = (bytes >> SPA_MINBLOCKSHIFT) - 1;
-		VERIFY3U(index, >=, 0);
-		VERIFY3U(index, <, ABD_PGSIZE >> SPA_MINBLOCKSHIFT);
+		VERIFY3S(index, >=, 0);
+		VERIFY3S(index, <, SUBPAGE_CACHE_AFTER_MAX_INDEX);
 
 		abd_subpage_cache[index] =
 		    kmem_cache_create(name, bytes, 512,
