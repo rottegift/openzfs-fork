@@ -2111,7 +2111,7 @@ wrapped_vmem_alloc_impl(vmem_t *vmp, size_t size, int vmflag)
 	return ((void *)addr);
 }
 
-#ifdef SMDREMOVEME
+#ifndef SMDREMOVEME
 void
 vmem_yfree_impl(vmem_t *vmp, const void *vaddr, size_t size, const char *name)
 {
