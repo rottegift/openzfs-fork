@@ -349,6 +349,28 @@ abd_free_zero_scatter(void)
 	kmem_cache_free(abd_chunk_cache, abd_zero_buf);
 }
 
+static int
+abd_kstats_update(kstat_t *ksp, int rw)
+{
+	abd_stats_t *as = ksp->ks_data;
+
+	if (rw == KSTAT_WRITE)
+		return (EACCES);
+	as->abdstat_struct_size.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_struct_size);
+	as->abdstat_scatter_cnt.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_scatter_cnt);
+	as->abdstat_scatter_data_size.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_scatter_data_size);
+	as->abdstat_scatter_chunk_waste.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_scatter_chunk_waste);
+	as->abdstat_linear_cnt.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_linear_cnt);
+	as->abdstat_linear_data_size.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_linear_data_size);
+	return (0);
+}
+
 void
 abd_init(void)
 {
@@ -375,10 +397,18 @@ abd_init(void)
 	    ABD_PGSIZE,
 	    NULL, NULL, NULL, NULL, abd_arena, cflags);
 
+	wmsum_init(&abd_sums.abdstat_struct_size, 0);
+	wmsum_init(&abd_sums.abdstat_scatter_cnt, 0);
+	wmsum_init(&abd_sums.abdstat_scatter_data_size, 0);
+	wmsum_init(&abd_sums.abdstat_scatter_chunk_waste, 0);
+	wmsum_init(&abd_sums.abdstat_linear_cnt, 0);
+	wmsum_init(&abd_sums.abdstat_linear_data_size, 0);
+
 	abd_ksp = kstat_create("zfs", 0, "abdstats", "misc", KSTAT_TYPE_NAMED,
 	    sizeof (abd_stats) / sizeof (kstat_named_t), KSTAT_FLAG_VIRTUAL);
 	if (abd_ksp != NULL) {
 		abd_ksp->ks_data = &abd_stats;
+		abd_ksp->ks_update = abd_kstats_update;
 		kstat_install(abd_ksp);
 	}
 
@@ -431,6 +461,13 @@ abd_fini(void)
 		kstat_delete(abd_ksp);
 		abd_ksp = NULL;
 	}
+
+	wmsum_fini(&abd_sums.abdstat_struct_size);
+	wmsum_fini(&abd_sums.abdstat_scatter_cnt);
+	wmsum_fini(&abd_sums.abdstat_scatter_data_size);
+	wmsum_fini(&abd_sums.abdstat_scatter_chunk_waste);
+	wmsum_fini(&abd_sums.abdstat_linear_cnt);
+	wmsum_fini(&abd_sums.abdstat_linear_data_size);
 
 	kmem_cache_destroy(abd_chunk_cache);
 	abd_chunk_cache = NULL;
