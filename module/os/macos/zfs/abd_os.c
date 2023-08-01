@@ -255,9 +255,10 @@ abd_alloc_chunks(abd_t *abd, size_t size)
 	} else {
 		const size_t n = abd_chunkcnt_for_bytes(size);
 
+		VERIFY3P(NULL, ==, abd->abd_chunk_source);
+		abd->abd_chunk_source = abd_chunk_cache;
+
 		for (int i = 0; i < n; i++) {
-			VERIFY3P(NULL, ==, abd->abd_chunk_source);
-			abd->abd_chunk_source = abd_chunk_cache;
 			void *c = kmem_cache_alloc(abd_chunk_cache, KM_SLEEP);
 			ABD_SCATTER(abd).abd_chunks[i] = c;
 		}
