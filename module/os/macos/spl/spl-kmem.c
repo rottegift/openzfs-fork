@@ -1274,7 +1274,19 @@ kmem_slab_destroy(kmem_cache_t *cp, kmem_slab_t *sp)
 		kmem_cache_free(kmem_slab_cache, sp);
 	}
 
-	VERIFY3U(vmem_contains(vmp, slab, cp->cache_slabsize), !=, 0);
+	if (!vmem_contains(vmp, slab, cp->cache_slabsize)) {
+		printf("ZFS: SPL: ERROR: %s:%d:%s no [%p:%lu] in %s, "
+		    "cache %s\n",
+		    __FILE__, __LINE__, __func__,
+		    slab, cp->cache_slabsize,
+		    vmp->vm_name,
+		    cp->cache_name);
+		extern void IODelay(unsigned microseconds);
+		IODelay(1000);
+		panic("%s: no [%p:%lu] in %s, cache %s",
+		    __func__, slab, cp->cache_slabsize,
+		    vmp->vm_name, cp->cache_name);
+	}
 
 	extern void vmem_yfree_impl(vmem_t *,
 	    const void *, size_t, const char *);
