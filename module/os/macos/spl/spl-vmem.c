@@ -1735,7 +1735,7 @@ do_alloc:
  */
 
 #ifndef SMDREMOVEME
-void vm_yfree(vmem_t *, const void *, size_t, const char *);
+void vmem_yfree(vmem_t *, const void *, size_t, const char *);
 
 void
 vmem_yfree(vmem_t *vmp, const void *vaddr, size_t size, const char *name)

@@ -1273,6 +1273,9 @@ kmem_slab_destroy(kmem_cache_t *cp, kmem_slab_t *sp)
 		}
 		kmem_cache_free(kmem_slab_cache, sp);
 	}
+
+	VERIFY3U(vmem_contains(vmp, slab, cp->cache_slabsize), !=, 0);
+
 	extern void vmem_yfree_impl(vmem_t *,
 	    const void *, size_t, const char *);
 	vmem_yfree_impl(vmp, slab, cp->cache_slabsize,
