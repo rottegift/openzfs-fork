@@ -191,6 +191,8 @@ abd_update_linear_stats(abd_t *abd, abd_stats_op_t op)
 	}
 }
 
+static inline int abd_subpage_cache_index(const size_t);
+
 void
 abd_verify_scatter(abd_t *abd)
 {
@@ -217,6 +219,16 @@ abd_verify_scatter(abd_t *abd)
 	for (int i = 0; i < n; i++) {
 		VERIFY3P(
 		    ABD_SCATTER(abd).abd_chunks[i], !=, NULL);
+	}
+
+	if (n > 1 || ABD_SCATTER(abd).abd_chunk_size > zfs_abd_chunk_size - SPA_MINBLOCKSIZE) {
+		VERIFY3P(abd->abd_chunk_source, ==, abd_chunk_cache);
+	} else {
+		const uint_t cs = ABD_SCATTER(abd).abd_chunk_size;
+		const int idx = abd_subpage_cache_index(cs);
+		VERIFY3S(idx, >=, 0);
+		VERIFY3S(idx, <, SUBPAGE_CACHE_AFTER_MAX_INDEX);
+		VERIFY3P(abd->abd_chunk_source, ==, abd_subpage_cache[idx]);
 	}
 }
 
