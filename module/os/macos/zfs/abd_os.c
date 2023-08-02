@@ -33,6 +33,9 @@
 #include <sys/zio.h>
 #include <sys/zfs_context.h>
 #include <sys/zfs_znode.h>
+#ifdef DEBUG
+#include <sys/kmem_impl.h>
+#endif
 
 typedef struct abd_stats {
 	kstat_named_t abdstat_struct_size;
@@ -121,7 +124,8 @@ _Static_assert(ABD_PGSIZE >= 4096, "ABD_PGSIZE unexpectedly smaller than 4096");
 _Static_assert(ABD_PGSIZE <= 16384,
 	"ABD_PGSIZE unexpectedly larger than 16384");
 
-kmem_cache_t *abd_subpage_cache[ABD_PGSIZE >> SPA_MINBLOCKSHIFT] = { NULL };
+#define	SUBPAGE_CACHE_INDICES (ABD_PGSIZE >> SPA_MINBLOCKSHIFT)
+kmem_cache_t *abd_subpage_cache[SUBPAGE_CACHE_INDICES] = { NULL };
 
 /*
  * We use a scattered SPA_MAXBLOCKSIZE sized ABD whose chunks are
@@ -241,6 +245,8 @@ abd_alloc_chunks(abd_t *abd, size_t size)
 	VERIFY3U(size, >, 0);
 	if (size <= (zfs_abd_chunk_size - SPA_MINBLOCKSIZE)) {
 		const int i = abd_subpage_cache_index(size);
+		VERIFY3S(i, >=, 0);
+		VERIFY3S(i, <, SUBPAGE_CACHE_INDICES);
 		const uint_t s = abd_subpage_enclosing_size(i);
 		VERIFY3U(s, >=, size);
 		VERIFY3U(s, <, zfs_abd_chunk_size);
@@ -263,11 +269,13 @@ abd_free_chunks(abd_t *abd)
 {
 	const uint_t abd_cs = ABD_SCATTER(abd).abd_chunk_size;
 
-	if (abd_cs < zfs_abd_chunk_size) {
+	if (abd_cs <= (zfs_abd_chunk_size - SPA_MINBLOCKSIZE)) {
 		VERIFY3U(abd->abd_size, <, zfs_abd_chunk_size);
 		VERIFY0(P2PHASE(abd_cs, SPA_MINBLOCKSIZE));
 
 		const int idx = abd_subpage_cache_index(abd_cs);
+		VERIFY3S(idx, >=, 0);
+		VERIFY3S(idx, <, SUBPAGE_CACHE_INDICES);
 
 		kmem_cache_free(abd_subpage_cache[idx],
 		    ABD_SCATTER(abd).abd_chunks[0]);
@@ -387,10 +395,17 @@ abd_init(void)
 	 * Additionally these KMF_
 	 * flags require the definitions from <sys/kmem_impl.h>
 	 */
-	// const int cflags = KMF_BUFTAG | KMF_LITE;
-	const int cflags = KMC_NOTOUCH;
+
+	/*
+	 * DEBUGGING: do this
+	 * const int cflags = KMF_BUFTAG | KMF_LITE;
+	 * or
+	 * const int cflags = KMC_ARENA_SLAB;
+	 */
+
+	const int cflags = KMC_ARENA_SLAB;
 #else
-	const int cflags = KMC_NOTOUCH;
+	const int cflags = KMC_ARENA_SLAB;
 #endif
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
@@ -434,12 +449,17 @@ abd_init(void)
 		    "abd_subpage_%lu", (ulong_t)bytes);
 
 		const int index = (bytes >> SPA_MINBLOCKSHIFT) - 1;
-		VERIFY3U(index, >=, 0);
-		VERIFY3U(index, <, ABD_PGSIZE >> SPA_MINBLOCKSHIFT);
+		VERIFY3S(index, >=, 0);
+		VERIFY3S(index, <, SUBPAGE_CACHE_INDICES);
 
+#ifdef _DEBUG
+		const int csubflags = KMF_LITE;
+#else
+		const int csubflags = 0;
+#endif
 		abd_subpage_cache[index] =
-		    kmem_cache_create(name, bytes, 512,
-		    NULL, NULL, NULL, NULL, abd_subpage_arena, cflags);
+		    kmem_cache_create(name, bytes, sizeof (void *),
+		    NULL, NULL, NULL, NULL, abd_subpage_arena, csubflags);
 
 		VERIFY3P(abd_subpage_cache[index], !=, NULL);
 	}
