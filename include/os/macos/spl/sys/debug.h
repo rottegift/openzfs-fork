@@ -139,7 +139,7 @@ void print_symbol(uintptr_t symbol);
 		if (!(_verify3_left OP _verify3_right))			\
 		    spl_panic(__FILE__, __FUNCTION__, __LINE__,		\
 		    "VERIFY3(" #LEFT " "  #OP " "  #RIGHT ") "		\
-		    "failed (%px " #OP " %px)\n",			\
+		    "failed (%p " #OP " %p)\n",			\
 		    (void *) (_verify3_left),				\
 		    (void *) (_verify3_right));				\
 	} while (0)
