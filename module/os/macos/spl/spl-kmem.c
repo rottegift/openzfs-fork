@@ -1273,7 +1273,6 @@ kmem_slab_destroy(kmem_cache_t *cp, kmem_slab_t *sp)
 		}
 		kmem_cache_free(kmem_slab_cache, sp);
 	}
-	kpreempt(KPREEMPT_SYNC);
 	vmem_free_impl(vmp, slab, cp->cache_slabsize);
 }
 
@@ -1711,7 +1710,6 @@ kmem_magazine_destroy(kmem_cache_t *cp, kmem_magazine_t *mp, int nrounds)
 		}
 
 		kmem_slab_free(cp, buf);
-		kpreempt(KPREEMPT_SYNC);
 	}
 	ASSERT(KMEM_MAGAZINE_VALID(cp, mp));
 	kmem_cache_free(cp->cache_magtype->mt_cache, mp);
@@ -2496,7 +2494,6 @@ kmem_cache_free(kmem_cache_t *cp, const void *buf)
 		}
 	}
 	mutex_exit(&ccp->cc_lock);
-	kpreempt(KPREEMPT_SYNC);
 	kmem_slab_free_constructed(cp, __DECONST(void *, buf), B_TRUE);
 }
 
@@ -4267,7 +4264,6 @@ kmem_cache_build_slablist(kmem_cache_t *cp)
 		list_link_init(&fs->next);
 		list_insert_tail(&freelist, fs);
 	}
-
 
 	kstat_delete(cp->cache_kstat);
 
