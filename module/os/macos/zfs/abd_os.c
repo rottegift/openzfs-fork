@@ -33,6 +33,9 @@
 #include <sys/zio.h>
 #include <sys/zfs_context.h>
 #include <sys/zfs_znode.h>
+#ifdef DEBUG
+#include <sys/kmem_impl.h>
+#endif
 
 typedef struct abd_stats {
 	kstat_named_t abdstat_struct_size;
@@ -121,7 +124,8 @@ _Static_assert(ABD_PGSIZE >= 4096, "ABD_PGSIZE unexpectedly smaller than 4096");
 _Static_assert(ABD_PGSIZE <= 16384,
 	"ABD_PGSIZE unexpectedly larger than 16384");
 
-kmem_cache_t *abd_subpage_cache[ABD_PGSIZE >> SPA_MINBLOCKSHIFT] = { NULL };
+#define	SUBPAGE_CACHE_INDICES (ABD_PGSIZE >> SPA_MINBLOCKSHIFT)
+kmem_cache_t *abd_subpage_cache[SUBPAGE_CACHE_INDICES] = { NULL };
 
 /*
  * We use a scattered SPA_MAXBLOCKSIZE sized ABD whose chunks are
@@ -241,6 +245,8 @@ abd_alloc_chunks(abd_t *abd, size_t size)
 	VERIFY3U(size, >, 0);
 	if (size <= (zfs_abd_chunk_size - SPA_MINBLOCKSIZE)) {
 		const int i = abd_subpage_cache_index(size);
+		VERIFY3S(i, >=, 0);
+		VERIFY3S(i, <, SUBPAGE_CACHE_INDICES);
 		const uint_t s = abd_subpage_enclosing_size(i);
 		VERIFY3U(s, >=, size);
 		VERIFY3U(s, <, zfs_abd_chunk_size);
@@ -263,11 +269,13 @@ abd_free_chunks(abd_t *abd)
 {
 	const uint_t abd_cs = ABD_SCATTER(abd).abd_chunk_size;
 
-	if (abd_cs < zfs_abd_chunk_size) {
+	if (abd_cs <= (zfs_abd_chunk_size - SPA_MINBLOCKSIZE)) {
 		VERIFY3U(abd->abd_size, <, zfs_abd_chunk_size);
 		VERIFY0(P2PHASE(abd_cs, SPA_MINBLOCKSIZE));
 
 		const int idx = abd_subpage_cache_index(abd_cs);
+		VERIFY3S(idx, >=, 0);
+		VERIFY3S(idx, <, SUBPAGE_CACHE_INDICES);
 
 		kmem_cache_free(abd_subpage_cache[idx],
 		    ABD_SCATTER(abd).abd_chunks[0]);
@@ -349,6 +357,28 @@ abd_free_zero_scatter(void)
 	kmem_cache_free(abd_chunk_cache, abd_zero_buf);
 }
 
+static int
+abd_kstats_update(kstat_t *ksp, int rw)
+{
+	abd_stats_t *as = ksp->ks_data;
+
+	if (rw == KSTAT_WRITE)
+		return (EACCES);
+	as->abdstat_struct_size.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_struct_size);
+	as->abdstat_scatter_cnt.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_scatter_cnt);
+	as->abdstat_scatter_data_size.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_scatter_data_size);
+	as->abdstat_scatter_chunk_waste.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_scatter_chunk_waste);
+	as->abdstat_linear_cnt.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_linear_cnt);
+	as->abdstat_linear_data_size.value.ui64 =
+	    wmsum_value(&abd_sums.abdstat_linear_data_size);
+	return (0);
+}
+
 void
 abd_init(void)
 {
@@ -365,20 +395,35 @@ abd_init(void)
 	 * Additionally these KMF_
 	 * flags require the definitions from <sys/kmem_impl.h>
 	 */
-	// const int cflags = KMF_BUFTAG | KMF_LITE;
-	const int cflags = KMC_NOTOUCH;
+
+	/*
+	 * DEBUGGING: do this
+	 * const int cflags = KMF_BUFTAG | KMF_LITE;
+	 * or
+	 * const int cflags = KMC_ARENA_SLAB;
+	 */
+
+	const int cflags = KMC_ARENA_SLAB;
 #else
-	const int cflags = KMC_NOTOUCH;
+	const int cflags = KMC_ARENA_SLAB;
 #endif
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
 	    ABD_PGSIZE,
 	    NULL, NULL, NULL, NULL, abd_arena, cflags);
 
+	wmsum_init(&abd_sums.abdstat_struct_size, 0);
+	wmsum_init(&abd_sums.abdstat_scatter_cnt, 0);
+	wmsum_init(&abd_sums.abdstat_scatter_data_size, 0);
+	wmsum_init(&abd_sums.abdstat_scatter_chunk_waste, 0);
+	wmsum_init(&abd_sums.abdstat_linear_cnt, 0);
+	wmsum_init(&abd_sums.abdstat_linear_data_size, 0);
+
 	abd_ksp = kstat_create("zfs", 0, "abdstats", "misc", KSTAT_TYPE_NAMED,
 	    sizeof (abd_stats) / sizeof (kstat_named_t), KSTAT_FLAG_VIRTUAL);
 	if (abd_ksp != NULL) {
 		abd_ksp->ks_data = &abd_stats;
+		abd_ksp->ks_update = abd_kstats_update;
 		kstat_install(abd_ksp);
 	}
 
@@ -404,12 +449,17 @@ abd_init(void)
 		    "abd_subpage_%lu", (ulong_t)bytes);
 
 		const int index = (bytes >> SPA_MINBLOCKSHIFT) - 1;
-		VERIFY3U(index, >=, 0);
-		VERIFY3U(index, <, ABD_PGSIZE >> SPA_MINBLOCKSHIFT);
+		VERIFY3S(index, >=, 0);
+		VERIFY3S(index, <, SUBPAGE_CACHE_INDICES);
 
+#ifdef _DEBUG
+		const int csubflags = KMF_LITE;
+#else
+		const int csubflags = 0;
+#endif
 		abd_subpage_cache[index] =
-		    kmem_cache_create(name, bytes, 512,
-		    NULL, NULL, NULL, NULL, abd_subpage_arena, cflags);
+		    kmem_cache_create(name, bytes, sizeof (void *),
+		    NULL, NULL, NULL, NULL, abd_subpage_arena, csubflags);
 
 		VERIFY3P(abd_subpage_cache[index], !=, NULL);
 	}
@@ -431,6 +481,13 @@ abd_fini(void)
 		kstat_delete(abd_ksp);
 		abd_ksp = NULL;
 	}
+
+	wmsum_fini(&abd_sums.abdstat_struct_size);
+	wmsum_fini(&abd_sums.abdstat_scatter_cnt);
+	wmsum_fini(&abd_sums.abdstat_scatter_data_size);
+	wmsum_fini(&abd_sums.abdstat_scatter_chunk_waste);
+	wmsum_fini(&abd_sums.abdstat_linear_cnt);
+	wmsum_fini(&abd_sums.abdstat_linear_data_size);
 
 	kmem_cache_destroy(abd_chunk_cache);
 	abd_chunk_cache = NULL;

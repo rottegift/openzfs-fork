@@ -263,15 +263,6 @@ arc_reclaim_thread(void *unused)
 			manual_pressure = post_adjust_manual_pressure;
 		}
 
-		/*
-		 * If we have successfully freed a bunch of memory,
-		 * it is worth reaping the abd_chunk_cache
-		 */
-		if (d_adj >= 64LL*1024LL*1024LL) {
-			extern kmem_cache_t *abd_chunk_cache;
-			kmem_cache_reap_now(abd_chunk_cache);
-		}
-
 		free_memory = post_adjust_free_memory;
 
 		const hrtime_t curtime = gethrtime();
