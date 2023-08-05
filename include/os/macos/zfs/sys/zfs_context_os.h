@@ -29,7 +29,20 @@
 
 #include <sys/ldi_buf.h>
 
+#if !defined(MAC_OS_X_VERSION_10_12) || \
+	(MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_12)
+#define	os_cast_to_atomic_pointer(p) \
+	(__typeof__(*(p)) volatile _Atomic *)(uintptr_t)(p)
+#define	atomic_store(object, desired) \
+	__c11_atomic_store(object, desired, __ATOMIC_SEQ_CST)
+#define	atomic_load(object) __c11_atomic_load(object, __ATOMIC_SEQ_CST)
+#define	atomic_fetch_add(object, operand) \
+	__c11_atomic_fetch_add(object, operand, __ATOMIC_SEQ_CST)
+#define	atomic_fetch_sub(object, operand) \
+	__c11_atomic_fetch_sub(object, operand, __ATOMIC_SEQ_CST)
+#else
 #include <os/atomic.h>
+#endif
 
 #define	ZIO_OS_FIELDS \
 	struct { \
