@@ -29,7 +29,6 @@
 
 #include <sys/ldi_buf.h>
 
-#include <stdatomic.h>
 #include <os/atomic.h>
 
 #define	ZIO_OS_FIELDS \
