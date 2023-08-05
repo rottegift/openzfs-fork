@@ -29,6 +29,7 @@
 
 #include <sys/ldi_buf.h>
 
+#include <stdatomic.h>
 #include <os/atomic.h>
 
 #define	ZIO_OS_FIELDS \
@@ -128,8 +129,8 @@ typedef int atomic_t;
 #define	hlist_entry(ptr, type, field)   container_of(ptr, type, field)
 /* END CSTYLED */
 
-#define	WRITE_ONCE_PTR(x, n) __c11_atomic_store( \
-	    os_cast_to_atomic_pointer(x), (n), __ATOMIC_SEQ_CST)
+#define	WRITE_ONCE_PTR(x, n) atomic_store( \
+	    os_cast_to_atomic_pointer(x), (n))
 
 static inline void
 hlist_add_head(struct hlist_node *n, struct hlist_head *h)
@@ -167,22 +168,19 @@ static inline int
 atomic_read(const atomic_t *v)
 {
 	barrier();
-	return (__c11_atomic_load(os_cast_to_atomic_pointer(v),
-	    __ATOMIC_ACQUIRE));
+	return (atomic_load(os_cast_to_atomic_pointer(v)));
 }
 
 static inline int
 atomic_inc(atomic_t *v)
 {
-	return (1 + __c11_atomic_fetch_add(os_cast_to_atomic_pointer(v),
-	    1, __ATOMIC_SEQ_CST));
+	return (1 + atomic_fetch_add(os_cast_to_atomic_pointer(v), 1));
 }
 
 static inline int
 atomic_dec(atomic_t *v)
 {
-	return (-1 + __c11_atomic_fetch_sub(os_cast_to_atomic_pointer(v),
-	    1, __ATOMIC_SEQ_CST));
+	return (-1 + atomic_fetch_sub(os_cast_to_atomic_pointer(v), 1));
 }
 
 extern void spl_qsort(void *array, size_t nm, size_t member_size,
