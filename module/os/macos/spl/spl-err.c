@@ -24,10 +24,10 @@
  * Copyright (C) 2013, 2020 Jorgen Lundman <lundman@lundman.net>
  *
  */
+
 #include <sys/sysmacros.h>
 #include <sys/cmn_err.h>
 #include <sys/debug.h>
-
 
 void
 vcmn_err(int ce, const char *fmt, va_list ap)
@@ -76,7 +76,6 @@ spl_panic(const char *file, const char *func, int line, const char *fmt, ...)
 	va_end(ap);
 
 	printf("%s", msg);
-	extern void panic(const char *, ...);
 	panic("%s", msg);
 
 	/* Unreachable */
