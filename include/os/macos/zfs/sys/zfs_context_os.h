@@ -29,6 +29,8 @@
 
 #include <sys/ldi_buf.h>
 
+#include <os/atomic.h>
+
 #define	ZIO_OS_FIELDS \
 	struct { \
 		ldi_buf_t	zm_buf; \
@@ -112,31 +114,12 @@ struct hlist_head {
 	struct hlist_node *first;
 };
 
-typedef struct {
-	volatile int counter;
-} atomic_t;
+typedef int atomic_t;
 
 #define	ACCESS_ONCE(x) (*(volatile typeof(x) *)&(x))
 
 #define	barrier()		__asm__ __volatile__("": : :"memory")
 #define	smp_rmb()		barrier()
-
-#define	READ_ONCE(x) ( \
-{	\
-			__typeof(x) __var = ( \
-					{	\
-					barrier();	\
-					ACCESS_ONCE(x);	\
-				});	\
-			barrier();	\
-			__var;	\
-		})
-
-#define	WRITE_ONCE(x, v) do { \
-		barrier();  \
-		ACCESS_ONCE(x) = (v);	\
-		barrier();	\
-	} while (0)
 
 /* BEGIN CSTYLED */
 #define	hlist_for_each(p, head)	\
@@ -145,20 +128,23 @@ typedef struct {
 #define	hlist_entry(ptr, type, field)   container_of(ptr, type, field)
 /* END CSTYLED */
 
+#define	WRITE_ONCE_PTR(x, n) __c11_atomic_store( \
+	    os_cast_to_atomic_pointer(x), (n), __ATOMIC_SEQ_CST)
+
 static inline void
 hlist_add_head(struct hlist_node *n, struct hlist_head *h)
 {
 	n->next = h->first;
 	if (h->first != NULL)
 		h->first->pprev = &n->next;
-	WRITE_ONCE(h->first, n);
+	WRITE_ONCE_PTR(&h->first, n);
 	n->pprev = &h->first;
 }
 
 static inline void
 hlist_del(struct hlist_node *n)
 {
-	WRITE_ONCE(*(n->pprev), n->next);
+	WRITE_ONCE_PTR(n->pprev, n->next);
 	if (n->next != NULL)
 		n->next->pprev = n->pprev;
 }
@@ -180,19 +166,23 @@ hlist_del(struct hlist_node *n)
 static inline int
 atomic_read(const atomic_t *v)
 {
-	return (READ_ONCE(v->counter));
+	barrier();
+	return (__c11_atomic_load(os_cast_to_atomic_pointer(v),
+	    __ATOMIC_ACQUIRE));
 }
 
 static inline int
 atomic_inc(atomic_t *v)
 {
-	return (__sync_fetch_and_add(&v->counter, 1) + 1);
+	return (1 + __c11_atomic_fetch_add(os_cast_to_atomic_pointer(v),
+	    1, __ATOMIC_SEQ_CST));
 }
 
 static inline int
 atomic_dec(atomic_t *v)
 {
-	return (__sync_fetch_and_add(&v->counter, -1) - 1);
+	return (-1 + __c11_atomic_fetch_sub(os_cast_to_atomic_pointer(v),
+	    1, __ATOMIC_SEQ_CST));
 }
 
 extern void spl_qsort(void *array, size_t nm, size_t member_size,
