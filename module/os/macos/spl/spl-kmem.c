@@ -51,6 +51,8 @@
 // ===============================================================
 // #define PRINT_CACHE_STATS 1
 
+#define	noinline __attribute__((noinline))
+
 // ===============================================================
 // OS Interface
 // ===============================================================
@@ -1256,7 +1258,7 @@ vmem_alloc_failure:
 /*
  * Destroy a slab.
  */
-static void
+noinline static void
 kmem_slab_destroy(kmem_cache_t *cp, kmem_slab_t *sp)
 {
 	vmem_t *vmp = cp->cache_arena;
@@ -1411,7 +1413,7 @@ static void kmem_slab_move_yes(kmem_cache_t *, kmem_slab_t *, void *);
 /*
  * Free a raw (unconstructed) buffer to cp's slab layer.
  */
-static void
+noinline static void
 kmem_slab_free(kmem_cache_t *cp, void *buf)
 {
 	kmem_slab_t *sp = NULL;
@@ -1681,7 +1683,7 @@ kmem_cache_free_debug(kmem_cache_t *cp, void *buf, caddr_t caller)
 /*
  * Free each object in magazine mp to cp's slab layer, and free mp itself.
  */
-static void
+noinline static void
 kmem_magazine_destroy(kmem_cache_t *cp, kmem_magazine_t *mp, int nrounds)
 {
 	int round;
@@ -1795,8 +1797,7 @@ kmem_depot_ws_zero(kmem_cache_t *cp)
  * causes us to preempt reaping up to hundres of times per second.  Using a
  * larger value (1GB) causes this to have virtually no effect.
  */
-size_t kmem_reap_preempt_bytes = 64 * 1024 * 1024;
-
+size_t kmem_reap_preempt_bytes = 1024 * 1024;
 
 /*
  * Reap all magazines that have fallen out of the depot's working set.
