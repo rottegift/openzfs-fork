@@ -2680,18 +2680,29 @@ spl_vmem_bucket_arena_by_size(size_t size)
 	return (vmem_bucket_arena_by_size(size));
 }
 
+/*
+ * We have just freed memory back to macOS so we let any waiters on the
+ * lowest-level bucket arenas know they have a chance to make progress in
+ * their hunt for memory from the operating system. We then tell the heap that
+ * there may be memory freshly imported into the buckets.
+ *
+ * This function wakes up the smallest-span buckets first, and because of the
+ * mutexing this biases towards small-allocation kmem caches.
+ */
 static inline void
 vmem_bucket_wake_all_waiters(void)
 {
 	for (int i = VMEM_BUCKET_LOWBIT; i < VMEM_BUCKET_HIBIT; i++) {
 		const int bucket = i - VMEM_BUCKET_LOWBIT;
 		vmem_t *bvmp = vmem_bucket_arena[bucket];
+		mutex_enter(&bvmp->vm_lock);
 		cv_broadcast(&bvmp->vm_cv);
+		mutex_exit(&bvmp->vm_lock);
 	}
+	mutex_enter(&spl_heap_arena->vm_lock);
 	cv_broadcast(&spl_heap_arena->vm_cv);
+	mutex_exit(&spl_heap_arena->vm_lock);
 }
-
-
 
 static void *
 xnu_alloc_throttled(vmem_t *bvmp, size_t size, int vmflag)
