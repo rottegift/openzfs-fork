@@ -4500,7 +4500,9 @@ spl_free_set_pressure(int64_t new_p)
 		spl_free_fast_pressure = FALSE;
 		// wake up both spl_free_thread() to recalculate spl_free
 		// and any spl_free_set_and_wait_pressure() threads
-		cv_broadcast(&spl_free_thread_cv);
+		mutex_enter(&spl_free_thread_lock);
+		cv_signal(&spl_free_thread_cv);
+		mutex_exit(&spl_free_thread_lock);
 	}
 	spl_free_last_pressure = zfs_lbolt();
 }
