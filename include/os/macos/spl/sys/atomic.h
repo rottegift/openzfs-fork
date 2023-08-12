@@ -31,6 +31,8 @@
 #define	_SPL_ATOMIC_H
 #include <sys/types.h>
 #include <string.h>
+#include <TargetConditionals.h>
+#include <AvailabilityMacros.h>
 
 #ifdef	__cplusplus
 extern "C" {
@@ -350,6 +352,21 @@ atomic_store_64(volatile uint64_t *target, uint64_t bits)
 {
 	return (__atomic_store_n(target, bits, __ATOMIC_RELEASE));
 }
+
+#if !defined(MAC_OS_X_VERSION_11) || \
+	(MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_11)
+#define	os_cast_to_atomic_pointer(p) \
+	(__typeof__(*(p)) volatile _Atomic *)(uintptr_t)(p)
+#define	atomic_store(object, desired) \
+	__c11_atomic_store(object, desired, __ATOMIC_SEQ_CST)
+#define	atomic_load(object) __c11_atomic_load(object, __ATOMIC_SEQ_CST)
+#define	atomic_fetch_add(object, operand) \
+	__c11_atomic_fetch_add(object, operand, __ATOMIC_SEQ_CST)
+#define	atomic_fetch_sub(object, operand) \
+	__c11_atomic_fetch_sub(object, operand, __ATOMIC_SEQ_CST)
+#else
+#include <os/atomic.h>
+#endif
 
 static inline __attribute__((always_inline)) void
 membar_producer(void)
