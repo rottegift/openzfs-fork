@@ -403,15 +403,9 @@ abd_init(void)
 	 * const int cflags = KMC_ARENA_SLAB;
 	 */
 
-	int cflags = KMC_ARENA_SLAB;
+	const int cflags = KMC_ARENA_SLAB;
 #else
-	int cflags = KMC_ARENA_SLAB;
-#endif
-
-#ifdef _KERNEL
-	extern uint64_t total_memory;
-	if (total_memory < 4ULL * 1024ULL * 1024ULL * 1024ULL)
-		cflags = ~(KMC_ARENA_SLAB);
+	const int cflags = KMC_ARENA_SLAB;
 #endif
 
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
@@ -458,8 +452,8 @@ abd_init(void)
 		VERIFY3S(index, >=, 0);
 		VERIFY3S(index, <, SUBPAGE_CACHE_INDICES);
 
-#ifdef DEBUG
-		const int csubflags = 0; /* KMF_LITE; */
+#ifdef _DEBUG
+		const int csubflags = KMF_LITE;
 #else
 		const int csubflags = 0;
 #endif
