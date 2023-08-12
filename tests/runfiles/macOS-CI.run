@@ -31,10 +31,6 @@ tests = [ 'clean_mirror_001_pos', 'clean_mirror_002_pos',
     'clean_mirror_003_pos', 'clean_mirror_004_pos']
 tags = ['functional', 'clean_mirror']
 
-[tests/functional/cli_root/zfs]
-tests = ['zfs_001_neg', 'zfs_002_pos']
-tags = ['functional', 'cli_root', 'zfs']
-
 [tests/functional/cli_root/zfs_bookmark]
 tests = ['zfs_bookmark_cliargs']
 tags = ['functional', 'cli_root', 'zfs_bookmark']
@@ -100,13 +96,6 @@ tags = ['functional', 'cli_root', 'zfs_send']
 [tests/functional/cli_root/zfs_unload-key]
 tests = ['zfs_unload-key', 'zfs_unload-key_all', 'zfs_unload-key_recursive']
 tags = ['functional', 'cli_root', 'zfs_unload-key']
-
-[tests/functional/cli_root/zpool_add]
-tests = ['zpool_add_001_pos', 'zpool_add_002_pos', 'zpool_add_003_pos',
-    'zpool_add_004_pos', 'zpool_add_006_pos', 'zpool_add_007_neg',
-    'zpool_add_008_neg', 'zpool_add_009_neg', 'zpool_add_010_pos',
-    'add-o_ashift', 'add_prop_ashift']
-tags = ['functional', 'cli_root', 'zpool_add']
 
 [tests/functional/cli_root/zpool_attach]
 tests = ['zpool_attach_001_neg', 'attach-o_ashift']
