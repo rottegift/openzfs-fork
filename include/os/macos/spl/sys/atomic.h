@@ -359,7 +359,11 @@ atomic_store_64(volatile uint64_t *target, uint64_t bits)
 	(__typeof__(*(p)) volatile _Atomic *)(uintptr_t)(p)
 #define	atomic_store(object, desired) \
 	__c11_atomic_store(object, desired, __ATOMIC_SEQ_CST)
+#define	atomic_store_nonatomic(object, desired) \
+	atomic_store(os_cast_to_atomic_pointer(object), desired)
 #define	atomic_load(object) __c11_atomic_load(object, __ATOMIC_SEQ_CST)
+#define	atomic_load_nonatomic(object) \
+	atomic_load(os_cast_to_atomic_pointer(object))
 #define	atomic_fetch_add(object, operand) \
 	__c11_atomic_fetch_add(object, operand, __ATOMIC_SEQ_CST)
 #define	atomic_fetch_sub(object, operand) \
