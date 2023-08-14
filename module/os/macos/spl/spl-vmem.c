@@ -226,6 +226,7 @@
 #include <mach/machine/vm_types.h>
 #include <libkern/OSDebug.h>
 #include <kern/thread_call.h>
+#include <sys/atomic.h>
 
 #define	VMEM_INITIAL		21	/* early vmem arenas */
 #define	VMEM_SEG_INITIAL	800
@@ -1816,19 +1817,20 @@ vmem_alloc_update_lowest_cb(thread_call_param_t param0,
     thread_call_param_t param1)
 {
 
+	/* we enter here with our caller holding vm_stack_lock */
+
 	/* param 0 is a vmp, set in vmem_create() */
 
 	vmem_t *vmp = (vmem_t *)param0;
 	cb_params_t *cbp = &vmp->vm_cb;
 
-	VERIFY3U(cbp->in_child, ==, B_FALSE);
+	VERIFY3U(atomic_load_nonatomic(&cbp->in_child), ==, B_FALSE);
 
 	/* tell the caller we are live */
-	cbp->in_child = B_TRUE;
-	__atomic_store_n(&cbp->in_child, B_TRUE, __ATOMIC_SEQ_CST);
+	atomic_store_nonatomic(&cbp->in_child, B_TRUE);
 
 	/* are we ever here after pending? */
-	ASSERT0(cbp->already_pending);
+	ASSERT0(atomic_load_nonatomic(&cbp->already_pending));
 
 	atomic_inc_64(&vmp->vm_kstat.vk_async_stack_calls.value.ui64);
 
@@ -1838,8 +1840,12 @@ vmem_alloc_update_lowest_cb(thread_call_param_t param0,
 	ASSERT3P(cbp->r_alloc, !=, NULL);
 
 	/* indicate that we are done and wait for our caller */
-	__atomic_store_n(&cbp->c_done, B_TRUE, __ATOMIC_SEQ_CST);
-	/* from this point we cannot use param1, vmp, or cbp */
+	atomic_store_nonatomic(&cbp->c_done, B_TRUE);
+
+	/*
+	 * from this point we cannot use param1, vmp, or cbp
+	 * except to signal that we are done
+	 */
 
 	mutex_enter(&vmp->vm_stack_lock);
 	cv_signal(&vmp->vm_stack_cv);
@@ -1902,6 +1908,11 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 	/*
 	 * send a pointer to our parameter struct to the worker thread's
 	 * vmem_alloc_update_lowest_cb()'s param1.
+	 *
+	 * it begins while we hold vmp->vm_stack_lock and
+	 * continues until the end of the function where it
+	 * does a mutex_enter(&vmp->vm_stack_lock) and then
+	 * signals vmp->vm_stack_cv.
 	 */
 	boolean_t tc_already_pending __maybe_unused =
 	    thread_call_enter1(vmp->vm_stack_call_thread, NULL);
@@ -1913,35 +1924,66 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 
 	/*
 	 * Wait for a cv_signal from our worker thread.
+	 *
 	 * "Impossible" things, left over from before the
 	 * cb_busy flag, which limits concurrency:
 	 * If the worker has died we will time out and panic.
 	 * If we get a spurious signal, it may have been
 	 * for someone else.
-	 * Less impossibly: if we lost the signal from
-	 * the worker, log that and carry one.
+	 * Less impossibly: if we lost the cv_signal from
+	 * the worker, log that and carry on.
 	 */
-	unsigned int i __maybe_unused;
-	for (i = 0; vmp->vm_cb.c_done != B_TRUE; i++) {
+
+	for (unsigned int i = 0; vmp->vm_cb.c_done != B_TRUE; i++) {
+		/*
+		 * cv_timedwait: give up vmp->stack_lock, which at the bottom
+		 * of vmem_alloc_update_lowest_cb() our worker thread will
+		 * mutex_enter() and then cv_signal() vmp->stack_cv.
+		 *
+		 * the timeout of ten seconds is an eternity; if our child has
+		 * not cv_signal()ed us by then, something has gone pretty
+		 * wrong.  check to see if cv_done flag is set by the worker;
+		 * if that's set but the expected cv_signal() has been lost,
+		 * that requires investigation.
+		 *
+		 * we still hold the lock after a cv_timedwait timeout.
+		 *
+		 */
 		int retval = cv_timedwait(&vmp->vm_stack_cv,
 		    &vmp->vm_stack_lock,
 		    ddi_get_lbolt() + SEC_TO_TICK(10));
 		if (retval == -1) {
 			if (vmp->vm_cb.c_done != B_TRUE) {
-				printf("timed out waiting for"
+				printf("SPL: %s:%d (iter %d)"
+				    " timed out waiting for"
 				    " child callback, inchild: %d: '%s'",
+				    __func__, __LINE__, i,
 				    vmp->vm_cb.in_child, vmp->vm_name);
 			} else {
-				printf("SPL: %s:%d timedout, lost cv_signal!\n",
-				    __func__, __LINE__);
+				printf("SPL: %s:%d (iter %d) timedout,"
+				    " lost cv_signal! (arena %s)\n",
+				    __func__, __LINE__, i,
+				    vmp->vm_name);
 				cv_signal(&vmp->vm_stack_cv);
 			}
-		} else if (retval == 1 && vmp->vm_cb.c_done != B_TRUE) {
-			ASSERT(vmp->vm_cb.in_child);
+		} else if (retval == 1 &&
+		    atomic_load_nonatomic(&vmp->vm_cb.c_done) != B_TRUE) {
+			ASSERT(atomic_load_nonatomic(&vmp->vm_cb.in_child));
 			/* this was not for us, wake up someone else */
-			printf("SPL: this was not for us, wake up '%s'\n",
+			printf("SPL: %s:%d (iter %d)"
+			    " this was not for us, wake up '%s'\n",
+			    __func__, __LINE__, i,
 			    vmp->vm_name);
 			cv_signal(&vmp->vm_stack_cv);
+		} else {
+			printf("SPL: %s:%d (iter %d):"
+			    " EINTR or ERESTART in spl_cv_timedwait()"
+			    " arena: %s, in_child %d, c_done %d."
+			    " Continuing.\n",
+			    __func__, __LINE__, i,
+			    vmp->vm_name,
+			    atomic_load_nonatomic(&vmp->vm_cb.in_child),
+			    atomic_load_nonatomic(&vmp->vm_cb.c_done));
 		}
 		VERIFY(mutex_owned(&vmp->vm_stack_lock));
 	}
