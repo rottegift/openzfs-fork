@@ -1926,6 +1926,12 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 	vmp->vm_cb.already_pending = tc_already_pending;
 
 	/*
+	 * Yield, possibly shortcutting the for loop below.
+	 */
+	kpreempt(KPREEMPT_SYNC);
+	spl_data_barrier();
+
+	/*
 	 * Wait for a cv_signal from our worker thread if it
 	 * has not already completed.  (If it has, we can just
 	 * skip the loop and mutex_exit()).
