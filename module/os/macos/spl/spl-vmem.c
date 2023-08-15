@@ -1916,6 +1916,7 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 	 * does a mutex_enter(&vmp->vm_stack_lock) and then
 	 * signals vmp->vm_stack_cv.
 	 */
+	spl_data_barrier();
 	boolean_t tc_already_pending __maybe_unused =
 	    thread_call_enter1(vmp->vm_stack_call_thread, NULL);
 
