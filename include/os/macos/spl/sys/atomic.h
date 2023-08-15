@@ -388,6 +388,25 @@ membar_consumer(void)
 	__c11_atomic_thread_fence(__ATOMIC_ACQ_REL);
 }
 
+/*
+ * Macro versions of full barrier.
+ *
+ * This is used to guard against possibly insufficiently-strong acquire
+ * semantics in the xnu calls to lck_mtx_{lock,unlock} and msleep in
+ * mutex_{enter,exit} resp. cv_wait\*.  It is not expensive on Apple Silicon
+ * in our code base, but it's unnecessary in x86-64.
+ *
+ * xcode clang on Apple Silicon will make this a "dmb ish" and take care about
+ * its own ordering of operations.  This provides an interproccessor total
+ * happens-before/happens-after ordering that x86-64 (and in the past, Sparc
+ * with TSO, total store ordering) gives us by default.
+ */
+#ifdef __arm64__
+#define	spl_data_barrier()	__atomic_thread_fence(__ATOMIC_SEQ_CST)
+#else
+#define	spl_data_barrier()	do {} while (0)
+#endif
+
 #ifdef	__cplusplus
 }
 #endif

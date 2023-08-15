@@ -342,9 +342,11 @@ spl_mutex_enter(kmutex_t *mp)
 #endif
 
 	atomic_inc_64(&mp->m_waiters);
-    lck_mtx_lock((lck_mtx_t *)&mp->m_lock);
+	spl_data_barrier();
+	lck_mtx_lock((lck_mtx_t *)&mp->m_lock);
+	spl_data_barrier();
 	atomic_dec_64(&mp->m_waiters);
-    mp->m_owner = current_thread();
+	mp->m_owner = current_thread();
 
 #ifdef SPL_DEBUG_MUTEX
 	if (mp->leak) {
@@ -387,9 +389,9 @@ spl_mutex_exit(kmutex_t *mp)
 	}
 #endif
 	mp->m_owner = NULL;
+	spl_data_barrier();
 	lck_mtx_unlock((lck_mtx_t *)&mp->m_lock);
 }
-
 
 int
 spl_mutex_tryenter(kmutex_t *mp)
@@ -401,7 +403,39 @@ spl_mutex_tryenter(kmutex_t *mp)
 #endif
 
 	atomic_inc_64(&mp->m_waiters);
+	spl_data_barrier();
 	held = lck_mtx_try_lock((lck_mtx_t *)&mp->m_lock);
+	/*
+	 * Now do a full barrier, because that's the right thing to do after
+	 * we get a lock from lck_mtx...(), which on Apple Silicon uses softer
+	 * acquire semantics than the multithread store ordering we'd like
+	 * in our emulation of heritage Solaris code.
+	 *
+	 * Apple Silicon relevant only.  spl_data_barrier() is a noop on
+	 * strong memory model machines like Intel.
+	 *
+	 * Initially this was an unconditional spl_data_barrier(), but the
+	 * point of the barrier is to let other threads know we have the lock
+	 * in happens-before sense (i.e., that the lock is held before the
+	 * other threads issue reads/writes on the affected cache lines, and
+	 * every thread enjoys happens-after on any reads/writes of those
+	 * cache lines after the barrier is issued).  The "dmb ish" is cheap
+	 * but not free, and there could be a mutex_tryenter() in a fairly
+	 * tight loop.  So we skip it if we don't obtain the lock.  We've also
+	 * recently done a full barrier so that we know that a previous lock
+	 * holder's mutex_exit() is in a happened-before state when we do
+	 * lck_mtx_try_lock().
+	 *
+	 * The atomic_dec_64() will use acquire/release semantics and who
+	 * knows how they slide around relative to the full barrier (it also
+	 * is not necessarily a super-fast instruction), so we don't want to
+	 * slide the barrier into a single if (held) after the atomic decrement.
+	 *
+	 * The atomic decrement also needs to happen before DEBUGging code, so
+	 * it should stay close to the lck_mtx...().
+	 */
+	if (held)
+		spl_data_barrier();
 	atomic_dec_64(&mp->m_waiters);
 	if (held) {
 		mp->m_owner = current_thread();
