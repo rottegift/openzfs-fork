@@ -342,9 +342,11 @@ spl_mutex_enter(kmutex_t *mp)
 #endif
 
 	atomic_inc_64(&mp->m_waiters);
-    lck_mtx_lock((lck_mtx_t *)&mp->m_lock);
+	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	lck_mtx_lock((lck_mtx_t *)&mp->m_lock);
+	__atomic_thread_fence(__ATOMIC_SEQ_CST);
 	atomic_dec_64(&mp->m_waiters);
-    mp->m_owner = current_thread();
+	mp->m_owner = current_thread();
 
 #ifdef SPL_DEBUG_MUTEX
 	if (mp->leak) {
@@ -387,9 +389,9 @@ spl_mutex_exit(kmutex_t *mp)
 	}
 #endif
 	mp->m_owner = NULL;
+	__atomic_thread_fence(__ATOMIC_SEQ_CST);
 	lck_mtx_unlock((lck_mtx_t *)&mp->m_lock);
 }
-
 
 int
 spl_mutex_tryenter(kmutex_t *mp)
@@ -401,7 +403,10 @@ spl_mutex_tryenter(kmutex_t *mp)
 #endif
 
 	atomic_inc_64(&mp->m_waiters);
+	__atomic_thread_fence(__ATOMIC_SEQ_CST);
 	held = lck_mtx_try_lock((lck_mtx_t *)&mp->m_lock);
+	if (held)
+		__atomic_thread_fence(__ATOMIC_SEQ_CST);
 	atomic_dec_64(&mp->m_waiters);
 	if (held) {
 		mp->m_owner = current_thread();
