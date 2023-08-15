@@ -1819,6 +1819,8 @@ vmem_alloc_update_lowest_cb(thread_call_param_t param0,
 
 	/* we enter here with our caller holding vm_stack_lock */
 
+	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+
 	/* param 0 is a vmp, set in vmem_create() */
 
 	vmem_t *vmp = (vmem_t *)param0;
