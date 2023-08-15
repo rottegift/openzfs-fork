@@ -342,9 +342,9 @@ spl_mutex_enter(kmutex_t *mp)
 #endif
 
 	atomic_inc_64(&mp->m_waiters);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	lck_mtx_lock((lck_mtx_t *)&mp->m_lock);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	atomic_dec_64(&mp->m_waiters);
 	mp->m_owner = current_thread();
 
@@ -389,7 +389,7 @@ spl_mutex_exit(kmutex_t *mp)
 	}
 #endif
 	mp->m_owner = NULL;
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	lck_mtx_unlock((lck_mtx_t *)&mp->m_lock);
 }
 
@@ -403,10 +403,10 @@ spl_mutex_tryenter(kmutex_t *mp)
 #endif
 
 	atomic_inc_64(&mp->m_waiters);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	held = lck_mtx_try_lock((lck_mtx_t *)&mp->m_lock);
 	if (held)
-		__atomic_thread_fence(__ATOMIC_SEQ_CST);
+		spl_data_barrier();
 	atomic_dec_64(&mp->m_waiters);
 	if (held) {
 		mp->m_owner = current_thread();

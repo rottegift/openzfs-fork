@@ -28,6 +28,7 @@
 #include <sys/condvar.h>
 #include <sys/errno.h>
 #include <sys/callb.h>
+#include <sys/atomic.h>
 
 extern wait_result_t thread_block(thread_continue_t continuation);
 
@@ -102,9 +103,9 @@ spl_cv_wait(kcondvar_t *cvp, kmutex_t *mp, int flags, const char *msg)
 #endif
 	mp->m_owner = NULL;
 	atomic_inc_64(&mp->m_sleepers);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	result = msleep(cvp, (lck_mtx_t *)&mp->m_lock, flags, msg, 0);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	atomic_dec_64(&mp->m_sleepers);
 	mp->m_owner = current_thread();
 #ifdef SPL_DEBUG_MUTEX
@@ -120,9 +121,9 @@ spl_cv_wait(kcondvar_t *cvp, kmutex_t *mp, int flags, const char *msg)
 	if (result == EINTR &&
 	    (mp->m_waiters > 0 || mp->m_sleepers > 0)) {
 		mutex_exit(mp);
-		__atomic_thread_fence(__ATOMIC_SEQ_CST);
+		spl_data_barrier();
 		(void) thread_block(THREAD_CONTINUE_NULL);
-		__atomic_thread_fence(__ATOMIC_SEQ_CST);
+		spl_data_barrier();
 		mutex_enter(mp);
 	}
 
@@ -171,9 +172,9 @@ spl_cv_timedwait(kcondvar_t *cvp, kmutex_t *mp, clock_t tim, int flags,
 
 	mp->m_owner = NULL;
 	atomic_inc_64(&mp->m_sleepers);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	result = msleep(cvp, (lck_mtx_t *)&mp->m_lock, flags, msg, &ts);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	atomic_dec_64(&mp->m_sleepers);
 	mp->m_owner = current_thread();
 
@@ -237,10 +238,10 @@ cv_timedwait_hires(kcondvar_t *cvp, kmutex_t *mp, hrtime_t tim,
 
 	mp->m_owner = NULL;
 	atomic_inc_64(&mp->m_sleepers);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	result = msleep(cvp, (lck_mtx_t *)&mp->m_lock,
 	    flag, "cv_timedwait_hires", &ts);
-	__atomic_thread_fence(__ATOMIC_SEQ_CST);
+	spl_data_barrier();
 	atomic_dec_64(&mp->m_sleepers);
 	mp->m_owner = current_thread();
 #ifdef SPL_DEBUG_MUTEX
