@@ -146,7 +146,7 @@ spl_cv_timedwait(kcondvar_t *cvp, kmutex_t *mp, clock_t tim, int flags,
     const char *msg)
 {
 	struct timespec ts;
-	int result;
+	int msleep_result;
 
 	if (msg != NULL && msg[0] == '&')
 		++msg;  /* skip over '&' prefixes */
@@ -173,7 +173,7 @@ spl_cv_timedwait(kcondvar_t *cvp, kmutex_t *mp, clock_t tim, int flags,
 	mp->m_owner = NULL;
 	atomic_inc_64(&mp->m_sleepers);
 	spl_data_barrier();
-	result = msleep(cvp, (lck_mtx_t *)&mp->m_lock, flags, msg, &ts);
+	msleep_result = msleep(cvp, (lck_mtx_t *)&mp->m_lock, flags, msg, &ts);
 	spl_data_barrier();
 	atomic_dec_64(&mp->m_sleepers);
 	mp->m_owner = current_thread();
@@ -182,7 +182,7 @@ spl_cv_timedwait(kcondvar_t *cvp, kmutex_t *mp, clock_t tim, int flags,
 	spl_wdlist_settime(mp->leak, gethrestime_sec());
 #endif
 
-	switch (result) {
+	switch (msleep_result) {
 
 		case EINTR:			/* Signal */
 		case ERESTART:
@@ -192,6 +192,7 @@ spl_cv_timedwait(kcondvar_t *cvp, kmutex_t *mp, clock_t tim, int flags,
 			return (-1);
 	}
 
+	ASSERT0(msleep_result);
 	return (1);
 }
 
@@ -204,7 +205,7 @@ cv_timedwait_hires(kcondvar_t *cvp, kmutex_t *mp, hrtime_t tim,
     hrtime_t res, int flag)
 {
 	struct timespec ts;
-	int result;
+	int msleep_result;
 
 	if (res > 1) {
 		/*
@@ -239,7 +240,7 @@ cv_timedwait_hires(kcondvar_t *cvp, kmutex_t *mp, hrtime_t tim,
 	mp->m_owner = NULL;
 	atomic_inc_64(&mp->m_sleepers);
 	spl_data_barrier();
-	result = msleep(cvp, (lck_mtx_t *)&mp->m_lock,
+	msleep_result = msleep(cvp, (lck_mtx_t *)&mp->m_lock,
 	    flag, "cv_timedwait_hires", &ts);
 	spl_data_barrier();
 	atomic_dec_64(&mp->m_sleepers);
@@ -248,7 +249,7 @@ cv_timedwait_hires(kcondvar_t *cvp, kmutex_t *mp, hrtime_t tim,
 	spl_wdlist_settime(mp->leak, gethrestime_sec());
 #endif
 
-	switch (result) {
+	switch (msleep_result) {
 
 		case EINTR:			/* Signal */
 		case ERESTART:
@@ -258,5 +259,6 @@ cv_timedwait_hires(kcondvar_t *cvp, kmutex_t *mp, hrtime_t tim,
 			return (-1);
 	}
 
+	ASSERT0(msleep_result);
 	return (1);
 }
