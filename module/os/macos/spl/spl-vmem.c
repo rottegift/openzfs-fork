@@ -1831,15 +1831,15 @@ vmem_alloc_update_lowest_cb(thread_call_param_t param0,
 	 */
 	cb_params_t *cbp = &vmp->vm_cb;
 
-	VERIFY3U(&vmp->vm_cb_busy, ==, B_TRUE);
+	VERIFY3U(vmp->vm_cb_busy, ==, B_TRUE);
 
-	VERIFY3U(&cbp->in_child, ==, B_FALSE);
+	VERIFY3U(cbp->in_child, ==, B_FALSE);
 
 	/* tell the caller we are live */
 	cbp->in_child = B_TRUE;
 
 	/* are we ever here after pending? */
-	ASSERT0(&cbp->already_pending);
+	ASSERT0(cbp->already_pending);
 
 	atomic_inc_64(&vmp->vm_kstat.vk_async_stack_calls.value.ui64);
 
