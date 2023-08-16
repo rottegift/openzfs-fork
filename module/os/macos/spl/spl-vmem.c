@@ -1975,38 +1975,56 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 		 * we still hold the lock after a cv_timedwait timeout.
 		 *
 		 */
+		const clock_t start_time = zfs_lbolt();
+		const clock_t deadline = start_time + SEC_TO_TICK(1);
 		int retval = cv_timedwait(&vmp->vm_stack_cv,
-		    &vmp->vm_stack_lock,
-		    ddi_get_lbolt() + SEC_TO_TICK(10));
+		    &vmp->vm_stack_lock, deadline);
 		if (retval == -1) {
 			if (vmp->vm_cb.c_done != B_TRUE) {
+				// never seen this
 				printf("SPL: %s:%d (iter %d)"
 				    " timed out waiting for"
 				    " child callback, inchild: %d: '%s'",
 				    __func__, __LINE__, i,
 				    vmp->vm_cb.in_child, vmp->vm_name);
 			} else {
+				// never seen this
 				printf("SPL: %s:%d (iter %d) timedout,"
 				    " lost cv_signal! (arena %s)\n",
 				    __func__, __LINE__, i,
 				    vmp->vm_name);
-				cv_signal(&vmp->vm_stack_cv);
 			}
 		} else if (retval == 1 && vmp->vm_cb.c_done != B_TRUE) {
 			ASSERT0(!vmp->vm_cb.in_child);
-			/* this was not for us, wake up someone else */
+			/* this happens occasionally */
+			const clock_t now = zfs_lbolt();
+			const clock_t elapsed_time = now - start_time;
+			clock_t abs_delta;
+			/* -time until deadline, +time after deadline */
+			bool neg_sign;
+			if (now >= deadline) {
+				neg_sign = false;
+				abs_delta = now - deadline;
+			} else {
+				neg_sign = true;
+				abs_delta = deadline - now;
+			}
 			printf("SPL: %s:%d (iter %d)"
 			    " in_child %d c_done %d"
-			    " size %lu flags %x"
+			    " size %lu flags %x,"
 			    " mtx_waiters %llu, mtx_sleepers %llu,"
+			    " start_time %lu, elapsed %lu,"
+			    " deadline %lu, now %lu,"
+			    " delta: %s%lu,"
 			    " cv_timedwait returned unexpectedly, arena '%s'\n",
 			    __func__, __LINE__, i,
 			    vmp->vm_cb.in_child, vmp->vm_cb.c_done,
 			    vmp->vm_cb.size, vmp->vm_cb.vmflag,
 			    vmp->vm_stack_lock.m_waiters,
 			    vmp->vm_stack_lock.m_sleepers,
+			    start_time, elapsed_time, deadline, now,
+			    (neg_sign) ? "-" : "", abs_delta,
 			    vmp->vm_name);
-			cv_signal(&vmp->vm_stack_cv);
 		} else if (retval == 1) {
 			/* c_done is B_TRUE */
 			break;
