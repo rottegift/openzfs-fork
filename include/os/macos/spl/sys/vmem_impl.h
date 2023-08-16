@@ -126,12 +126,17 @@ typedef struct thread_call *thread_call_t;
 
 /* parameters passed between thread_call threads */
 typedef struct cb_params {
-	boolean_t	in_child;	/* set in worker callback function */
-	boolean_t	already_pending; /* sanity check thread_call_enter1() */
-	size_t		size;
-	int		vmflag;
-	void		*r_alloc;	/* vmem_alloc() return value */
-	boolean_t	c_done;		/* flag worker callback is done */
+	/* has the worker thread been entered? */
+	_Atomic boolean_t	in_child;
+	/* sanity check on thread_call_enter1() behaviour */
+	_Atomic boolean_t	already_pending;
+	/* how much to allocate, what vmem_alloc_impl() flags to use */
+	_Atomic size_t		size;
+	int			vmflag;
+	/* wrapped_vmem_alloc_impl() return value */
+	void			*r_alloc;
+	/* has the worker thread finished? */
+	_Atomic boolean_t	c_done;
 } cb_params_t;
 
 struct vmem {

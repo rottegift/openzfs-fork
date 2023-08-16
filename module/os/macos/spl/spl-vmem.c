@@ -1816,7 +1816,6 @@ void
 vmem_alloc_update_lowest_cb(thread_call_param_t param0,
     thread_call_param_t param1)
 {
-
 	/* we enter here with our caller holding vm_stack_lock */
 
 	spl_data_barrier();
@@ -1824,15 +1823,23 @@ vmem_alloc_update_lowest_cb(thread_call_param_t param0,
 	/* param 0 is a vmp, set in vmem_create() */
 
 	vmem_t *vmp = (vmem_t *)param0;
+
+	/*
+	 * several cb_params_t members are _Atomic,
+	 * so the compiler will generate the relevant
+	 * synchronization instructions
+	 */
 	cb_params_t *cbp = &vmp->vm_cb;
 
-	VERIFY3U(atomic_load_nonatomic(&cbp->in_child), ==, B_FALSE);
+	VERIFY3U(&vmp->vm_cb_busy, ==, B_TRUE);
+
+	VERIFY3U(&cbp->in_child, ==, B_FALSE);
 
 	/* tell the caller we are live */
-	atomic_store_nonatomic(&cbp->in_child, B_TRUE);
+	cbp->in_child = B_TRUE;
 
 	/* are we ever here after pending? */
-	ASSERT0(atomic_load_nonatomic(&cbp->already_pending));
+	ASSERT0(&cbp->already_pending);
 
 	atomic_inc_64(&vmp->vm_kstat.vk_async_stack_calls.value.ui64);
 
@@ -1842,7 +1849,7 @@ vmem_alloc_update_lowest_cb(thread_call_param_t param0,
 	ASSERT3P(cbp->r_alloc, !=, NULL);
 
 	/* indicate that we are done and wait for our caller */
-	atomic_store_nonatomic(&cbp->c_done, B_TRUE);
+	cbp->c_done = B_TRUE;
 
 	/*
 	 * from this point we cannot use param1, vmp, or cbp
@@ -1868,13 +1875,21 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 		spl_lowest_alloc_stack_remaining = sr;
 
 	/*
-	 * Loop until we can grab cb_busy flag for ourselves:
-	 * allow only one thread at a time to thread_call_enter
-	 * on this vmem arena, because there is a race wherein
-	 * a later racer can cancel a "medallist" who got to
-	 * the callback registered earlier before the medallist
-	 * has begun running in the callback function.
+	 * Because we have to give up the mutex below,
+	 * gate other threads with an atomic compare-exchange.
+	 *
+	 * We open the gate at the end of this function.
+	 *
+	 * Here and in the worker function we mutate cb_params, which is part
+	 * of the vmem_t structure, so we must let threads for this particular
+	 * arena proceed one at a time.
+	 *
+	 * The worker thread for this arena similarly mutates cb_params.
+	 *
+	 * Finally, invoking the worker thread for this arena multiple times
+	 * in a row can cancel invocations which have not yet started.
 	 */
+
 	for (unsigned int i = 1; ; i++) {
 		/*
 		 * if busy == f then busy = true and
@@ -1917,7 +1932,7 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 	 * signals vmp->vm_stack_cv.
 	 */
 	spl_data_barrier();
-	boolean_t tc_already_pending __maybe_unused =
+	boolean_t tc_already_pending =
 	    thread_call_enter1(vmp->vm_stack_call_thread, NULL);
 
 	/* in DEBUG, bleat if worker thread was already working */
@@ -1945,8 +1960,7 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 	 * the worker, log that and carry on.
 	 */
 
-	for (unsigned int i = 0;
-	    atomic_load_nonatomic(&vmp->vm_cb.c_done) != B_TRUE; i++) {
+	for (unsigned int i = 0; vmp->vm_cb.c_done != B_TRUE; i++) {
 		/*
 		 * cv_timedwait: give up vmp->stack_lock, which at the bottom
 		 * of vmem_alloc_update_lowest_cb() our worker thread will
@@ -1978,13 +1992,19 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 				    vmp->vm_name);
 				cv_signal(&vmp->vm_stack_cv);
 			}
-		} else if (retval == 1 &&
-		    atomic_load_nonatomic(&vmp->vm_cb.c_done) != B_TRUE) {
-			ASSERT(atomic_load_nonatomic(&vmp->vm_cb.in_child));
+		} else if (retval == 1 && vmp->vm_cb.c_done != B_TRUE) {
+			ASSERT0(!vmp->vm_cb.in_child);
 			/* this was not for us, wake up someone else */
 			printf("SPL: %s:%d (iter %d)"
-			    " this was not for us, wake up '%s'\n",
+			    " in_child %d c_done %d"
+			    " size %lu flags %x"
+			    " mtx_waiters %llu, mtx_sleepers %llu,"
+			    " cv_timedwait returned unexpectedly, arena '%s'\n",
 			    __func__, __LINE__, i,
+			    vmp->vm_cb.in_child, vmp->vm_cb.c_done,
+			    vmp->vm_cb.size, vmp->vm_cb.vmflag,
+			    vmp->vm_stack_lock.m_waiters,
+			    vmp->vm_stack_lock.m_sleepers,
 			    vmp->vm_name);
 			cv_signal(&vmp->vm_stack_cv);
 		} else if (retval == 1) {
@@ -1997,21 +2017,27 @@ vmem_alloc_in_worker_thread(vmem_t *vmp, size_t size, int vmflag)
 			    " Continuing.\n",
 			    __func__, __LINE__, i,
 			    vmp->vm_name,
-			    atomic_load_nonatomic(&vmp->vm_cb.in_child),
-			    atomic_load_nonatomic(&vmp->vm_cb.c_done));
+			    vmp->vm_cb.in_child,
+			    vmp->vm_cb.c_done);
 		}
 		VERIFY(mutex_owned(&vmp->vm_stack_lock));
 	}
 
-	mutex_exit(&vmp->vm_stack_lock);
+	ASSERT3P(vmp->vm_cb.r_alloc, !=, NULL);
+
+	/*
+	 * save this where it can't be stomped by
+	 * a thread waiting for cb_busy to go zero
+	 */
+	void *allocation = vmp->vm_cb.r_alloc;
 
 	/* give up busy flag */
 	VERIFY0(!vmp->vm_cb_busy);
 	vmp->vm_cb_busy = false;
 
-	ASSERT3P(vmp->vm_cb.r_alloc, !=, NULL);
+	mutex_exit(&vmp->vm_stack_lock);
 
-	return (vmp->vm_cb.r_alloc);
+	return (allocation);
 }
 
 /*
