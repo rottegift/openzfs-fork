@@ -2049,16 +2049,11 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	/*
 	 * Timeshare lets the system adjust the priority up or down depending
 	 * on system activity; on newer macOS this is the default behaviour
-	 * and is a good choice for us practically always.
+	 * and is a good choice for us practically always, the exception
+	 * being very low-priority threads (scrub-related)
 	 */
-	set_thread_timeshare_named(thread,
-	    tq->tq_name);
-
-	/*
-	 * darwin_bg background policy
-	 */
-	if (pri < minclsyspri)
-		spl_thread_set_darwin_bg_policy_named(thread,
+	if (pri >= minclsyspri)
+		set_thread_timeshare_named(thread,
 		    tq->tq_name);
 }
 
