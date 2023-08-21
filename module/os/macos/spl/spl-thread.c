@@ -120,19 +120,6 @@ timeout_generic(int type, void (*func)(void *), void *arg,
 	return ((callout_id_t)arg);
 }
 
-#if defined(MACOS_IMPURE)
-extern void throttle_set_thread_io_policy(int priority);
-#endif
-
-void
-spl_throttle_set_thread_io_policy(int priority)
-{
-#if defined(MACOS_IMPURE)
-	throttle_set_thread_io_policy(priority);
-#endif
-}
-
-
 /*
  * Set xnu kernel thread importance based on openzfs pri_t.
  *
@@ -160,15 +147,26 @@ set_thread_importance_named(thread_t thread, pri_t pri, const char *name)
 	/*
 	 * start by finding an offset from BASEPRI_KERNEL,
 	 * which is found in osfmk/kern/sched.h
+	 *
+	 * (it's 81, importance is a signed-offset from that)
 	 */
 
 	policy.importance = pri - 81;
 
-	/* dont let ANY of our threads run as high as networking & GPU */
+	/*
+	 * dont let ANY of our threads run as high as networking & GPU
+	 *
+	 * hard cap on base priority 81
+	 */
 	if (policy.importance > 0)
 		policy.importance = 0;
-	else if (policy.importance < (-11))
-		policy.importance = -11;
+	/*
+	 * set a floor on importance at priority 60, which is about the same
+	 * as bluetoothd and userland audio, which are of relatively high
+	 * importance
+	 */
+	else if (policy.importance < (-21))
+		policy.importance = -21;
 
 	int i = policy.importance;
 	kern_return_t pol_prec_kret = thread_policy_set(thread,
