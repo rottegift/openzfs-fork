@@ -1972,6 +1972,30 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 {
 	pri_t pri = tq->tq_pri;
 
+	/*
+	 * Passivate I/Os for this thread
+	 * (Default is IOPOOL_IMPORTANT)
+	 *
+	 * dsl_scan threads can be THROTTLE, which
+	 * forces very short sleeps if too many throttleable
+	 * requests happen too soon after a higher-priority
+	 * request
+	 */
+	if (pri >= minclsyspri)
+		spl_throttle_set_thread_io_policy(IOPOL_PASSIVE);
+	else
+		spl_throttle_set_thread_io_policy(IOPOL_THROTTLE);
+
+	/*
+	 * Timeshare lets the system adjust the priority up or down depending
+	 * on system activity; on newer macOS this is the default behaviour
+	 * and is a good choice for us practically always, the exception
+	 * being very low-priority threads (scrub-related)
+	 */
+	if (pri >= minclsyspri)
+		set_thread_timeshare_named(thread,
+		    tq->tq_name);
+
 	if (tq->tq_flags & TASKQ_DUTY_CYCLE) {
 		taskq_thread_set_cpulimit(tq);
 	}
@@ -2032,29 +2056,6 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 		set_thread_latency_named(thread,
 		    std_latency, tq->tq_name);
 
-	/*
-	 * Passivate I/Os for this thread
-	 * (Default is IOPOOL_IMPORTANT)
-	 *
-	 * dsl_scan threads can be THROTTLE, which
-	 * forces very short sleeps if too many throttleable
-	 * requests happen too soon after a higher-priority
-	 * request
-	 */
-	if (pri >= minclsyspri)
-		spl_throttle_set_thread_io_policy(IOPOL_PASSIVE);
-	else
-		spl_throttle_set_thread_io_policy(IOPOL_THROTTLE);
-
-	/*
-	 * Timeshare lets the system adjust the priority up or down depending
-	 * on system activity; on newer macOS this is the default behaviour
-	 * and is a good choice for us practically always, the exception
-	 * being very low-priority threads (scrub-related)
-	 */
-	if (pri >= minclsyspri)
-		set_thread_timeshare_named(thread,
-		    tq->tq_name);
 }
 
 #endif // __APPLE__
