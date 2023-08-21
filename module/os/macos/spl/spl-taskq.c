@@ -1941,12 +1941,29 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	/*
 	 * Timeshare lets the system adjust the priority up or down depending
 	 * on system activity; on newer macOS this is the default behaviour
-	 * and is a good choice for us practically always, the exception
-	 * being very low-priority threads (scrub-related)
+	 * and is a good choice for us practically always, with the following
+	 * exceptions:
+	 *
+	 * Strict-FIFO taskq threads should be at a stable priority, so that
+	 * the immediately previous job has not alterred priority up or down,
+	 * as each job in the FIFO queue can be effectively independent.
+	 *
+	 * Very low priority threads should not be able to rise to very high
+	 * priority on idle systems or with unexpectedly good behaviour
+	 * (vdev_disk_taskq_scrub threads have been observed to rise to 93!)
 	 */
-	if (pri >= minclsyspri)
-		set_thread_timeshare_named(thread,
-		    tq->tq_name);
+
+	/* BEGIN CSTYLED */
+	if (pri < minclsyspri ||
+	    (tq->tq_maxsize == (tq->tq_flags & (TASKQ_DYNAMIC
+		    | TASKQ_THREADS_CPU_PCT
+		    | TASKQ_DUTY_CYCLE
+		    | TASKQ_DC_BATCH)) == 0)) {
+		set_thread_notimeshare_named(thread, tq->tq_name);
+	} else {
+		set_thread_timeshare_named(thread, tq->tq_name);
+	}
+	/* END CSTYLED */
 
 	if (tq->tq_flags & TASKQ_DUTY_CYCLE) {
 		taskq_thread_set_cpulimit(tq);

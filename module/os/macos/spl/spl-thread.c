@@ -69,6 +69,9 @@ spl_thread_create_named(
 
 	set_thread_importance_named(thread, pri, "anonymous new zfs thread");
 
+	/* all threads default to TIMESHARE */
+	set_thread_timeshare_named(thread, "anonymous new zfs thread");
+
 	if (name == NULL)
 		name = "unnamed zfs thread";
 
@@ -292,4 +295,30 @@ void
 set_thread_timeshare(thread_t thread)
 {
 	set_thread_timeshare_named(thread, "anonymous zfs function");
+}
+
+/*
+ * Although this repeats some of the above, there is likely to be different
+ * debugging (e.g. ASSERT) compared to the set functions above.
+ */
+
+void
+set_thread_notimeshare_named(thread_t thread, const char *name)
+{
+	thread_extended_policy_data_t policy = { .timeshare = FALSE };
+	kern_return_t kret = thread_policy_set(thread,
+	    THREAD_EXTENDED_POLICY,
+	    (thread_policy_t)&policy,
+	    THREAD_EXTENDED_POLICY_COUNT);
+	if (kret != KERN_SUCCESS) {
+		printf("SPL: %s:%d: WARNING failed to UNSET"
+		    " timeshare policy retval: %d, %s\n",
+		    __func__, __LINE__, kret, name);
+	}
+}
+
+void
+set_thread_notimeshare(thread_t thread)
+{
+	set_thread_notimeshare_named(thread, "anonymous zfs nontimeshare");
 }

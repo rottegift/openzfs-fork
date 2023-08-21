@@ -148,8 +148,10 @@ spl_mutex_subsystem_init(void)
 	mutex_list_mutex.m_initialised = MUTEX_INIT;
 	cv_init(&mutex_list_cv, NULL, CV_DEFAULT, NULL);
 
-	(void) thread_create(NULL, 0, spl_wdlist_check, 0, 0, 0, 0,
-	    maxclsyspri);
+	thread_t t = thread_create_named(__func__, NULL, 0,
+	    spl_wdlist_check, 0, 0, 0, 0, maxclsyspri);
+	/* we don't want this to sink under system load */
+	set_thread_notimeshare_named(t, __func__);
 #endif
 	return (0);
 }
