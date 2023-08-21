@@ -1893,48 +1893,14 @@ taskq_thread_wait(taskq_t *tq, kmutex_t *mx, kcondvar_t *cv,
 #define	CPULIMIT_INTERVAL (MSEC2NSEC(100ULL))
 #define	THREAD_CPULIMIT_BLOCK 0x1
 
-#if defined(MACOS_IMPURE)
-extern int thread_set_cpulimit(int action, uint8_t percentage,
-    uint64_t interval_ns);
-#endif
-
 static void
 taskq_thread_set_cpulimit(taskq_t *tq)
 {
 	if (tq->tq_flags & TASKQ_DUTY_CYCLE) {
 		ASSERT3U(tq->tq_DC, <=, 100);
 		ASSERT3U(tq->tq_DC, >, 0);
-#if defined(MACOS_IMPURE)
-		const uint8_t inpercent = MIN(100, MAX(tq->tq_DC, 1));
-		const uint64_t interval_ns = CPULIMIT_INTERVAL;
-		/*
-		 * deflate tq->tq_DC (a percentage of cpu) by the
-		 * ratio of max_ncpus (logical cpus) to physical_ncpu.
-		 *
-		 * we don't want hyperthread resources to get starved
-		 * out by a large DUTY CYCLE, and we aren't doing
-		 * processor set pinning of threads to CPUs of either
-		 * type (neither does Illumos, but sysdc does take
-		 * account of psets when calculating the duty cycle,
-		 * and I don't know how to do that yet).
-		 *
-		 * do some scaled integer division to get
-		 * decpct = percent/(maxcpus/physcpus)
-		 */
-		const uint64_t numcpus = max_ncpus - num_ecores;
-		const uint64_t m100 = (uint64_t)numcpus * 100ULL;
-		const uint64_t r100 = m100 / (MAX(numcpus/2, 1));
-		const uint64_t pct100 = inpercent * 100ULL;
-		const uint64_t decpct = pct100 / r100;
-		uint8_t percent = MIN(decpct, inpercent);
-		ASSERT3U(percent, <=, 100);
-		ASSERT3U(percent, >, 0);
 
-		int ret = thread_set_cpulimit(THREAD_CPULIMIT_BLOCK,
-		    percent, interval_ns);
-#else
 		int ret = 45; // ENOTSUP -- XXX todo: drop priority?
-#endif
 
 		if (ret != KERN_SUCCESS) {
 			printf("SPL: %s:%d: WARNING"
@@ -1971,6 +1937,16 @@ static void
 set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 {
 	pri_t pri = tq->tq_pri;
+
+	/*
+	 * Timeshare lets the system adjust the priority up or down depending
+	 * on system activity; on newer macOS this is the default behaviour
+	 * and is a good choice for us practically always, the exception
+	 * being very low-priority threads (scrub-related)
+	 */
+	if (pri >= minclsyspri)
+		set_thread_timeshare_named(thread,
+		    tq->tq_name);
 
 	if (tq->tq_flags & TASKQ_DUTY_CYCLE) {
 		taskq_thread_set_cpulimit(tq);
@@ -2031,15 +2007,6 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	else
 		set_thread_latency_named(thread,
 		    std_latency, tq->tq_name);
-
-	/*
-	 * Passivate I/Os for this thread
-	 * (Default is IOPOOL_IMPORTANT)
-	 */
-	spl_throttle_set_thread_io_policy(IOPOL_PASSIVE);
-
-	set_thread_timeshare_named(thread,
-	    tq->tq_name);
 }
 
 #endif // __APPLE__
