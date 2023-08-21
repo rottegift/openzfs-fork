@@ -291,3 +291,21 @@ set_thread_timeshare(thread_t thread)
 {
 	set_thread_timeshare_named(thread, "anonymous zfs function");
 }
+
+void
+spl_thread_set_darwin_bg_policy_named(thread_t thread, const char *name)
+{
+	thread_background_policy_data_t policy = {
+		.priority = THREAD_BACKGROUND_POLICY_DARWIN_BG
+	};
+
+	kern_return_t kret = thread_policy_set(thread,
+	    THREAD_BACKGROUND_POLICY,
+	    (thread_background_policy_t)&policy,
+	    THREAD_BACKGROUND_POLICY_COUNT);
+	if (kret != KERN_SUCCESS) {
+		printf("SPL: %s:%d:  WARNING failed to set"
+		    " background policy retval: %d, %s\n",
+		    __func__, __LINE__, kret, name);
+	}
+}

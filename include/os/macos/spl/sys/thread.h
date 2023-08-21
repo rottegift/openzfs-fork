@@ -147,6 +147,9 @@ extern void set_thread_timeshare(thread_t);
 
 extern void spl_throttle_set_thread_io_policy(int);
 
+extern void spl_thread_set_darwin_bg_policy_named(thread_t,
+    const char *);
+
 #define	delay osx_delay
 extern void osx_delay(int);
 
