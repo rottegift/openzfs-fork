@@ -1945,7 +1945,8 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	set_thread_notimeshare_named(thread, tq->tq_name);
 	set_thread_importance_named(thread,
 	    pri, tq->tq_name);
-
+	set_thread_notimeshare_named(thread, "anonymous new zfs thread");
+	return;
 #if 0
 
 	/*
