@@ -69,8 +69,18 @@ spl_thread_create_named(
 
 	set_thread_importance_named(thread, pri, "anonymous new zfs thread");
 
-	/* all threads default to TIMESHARE */
-	set_thread_timeshare_named(thread, "anonymous new zfs thread");
+	/*
+	 * all threads default to TIMESHARE
+	 *
+	 * except threads with priorities lower than minclsyspri
+	 */
+
+	if (pri >= minclsyspri)
+		set_thread_timeshare_named(thread,
+		    "anonymous new zfs thread");
+	else
+		set_thread_notimeshare_named(thread,
+		    "anonymous new loprio thread");
 
 	if (name == NULL)
 		name = "unnamed zfs thread";

@@ -1967,10 +1967,8 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 		    | TASKQ_DUTY_CYCLE
 		    | TASKQ_DC_BATCH)) == 0)) {
 		thread_is_timeshare = FALSE;
-		set_thread_notimeshare_named(thread, tq->tq_name);
 	} else {
 		thread_is_timeshare = TRUE;
-		set_thread_timeshare_named(thread, tq->tq_name);
 	}
 	/* END CSTYLED */
 
@@ -2048,6 +2046,11 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	else
 		set_thread_latency_named(thread,
 		    std_latency, tq->tq_name);
+
+	if (thread_is_timeshare)
+		set_thread_timeshare_named(thread, tq->tq_name);
+	else
+		set_thread_notimeshare_named(thread, tq->tq_name);
 }
 
 #endif // __APPLE__
