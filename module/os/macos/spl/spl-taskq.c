@@ -505,6 +505,8 @@
 
 static kmem_cache_t *taskq_ent_cache, *taskq_cache;
 
+static void set_taskq_thread_attributes(thread_t, taskq_t *);
+
 static uint_t taskq_tsd;
 
 /*
@@ -1814,6 +1816,8 @@ taskq_thread_create(taskq_t *tq)
 		    TS_RUN, tq->tq_pri);
 	}
 
+	set_taskq_thread_attributes(t, tq);
+
 	if (!first) {
 		mutex_enter(&tq->tq_lock);
 		return;
@@ -2140,6 +2144,10 @@ taskq_thread(void *arg)
 			freeit = B_TRUE;
 		}
 
+		/* set importance, TIMESHARE, QOS and other policies */
+		set_taskq_thread_attributes(current_thread(), tq);
+
+		/* take lock, start clock, call our work function */
 		rw_enter(&tq->tq_threadlock, RW_READER);
 		start = gethrtime();
 		DTRACE_PROBE2(taskq__exec__start, taskq_t *, tq,
