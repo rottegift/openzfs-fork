@@ -1957,7 +1957,6 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	if (pri < minclsyspri ||
 	    (tq->tq_maxsize == 1 &&
 		(tq->tq_flags & (TASKQ_DYNAMIC
-		    | TASKQ_THREADS_CPU_PCT
 		    | TASKQ_DUTY_CYCLE
 		    | TASKQ_DC_BATCH)) == 0)) {
 		set_thread_notimeshare_named(thread, tq->tq_name);
