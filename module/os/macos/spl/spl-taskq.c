@@ -1955,7 +1955,8 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 
 	/* BEGIN CSTYLED */
 	if (pri < minclsyspri ||
-	    (tq->tq_maxsize == (tq->tq_flags & (TASKQ_DYNAMIC
+	    (tq->tq_maxsize == 1 &&
+		(tq->tq_flags & (TASKQ_DYNAMIC
 		    | TASKQ_THREADS_CPU_PCT
 		    | TASKQ_DUTY_CYCLE
 		    | TASKQ_DC_BATCH)) == 0)) {
