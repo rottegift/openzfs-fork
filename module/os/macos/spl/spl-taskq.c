@@ -1966,7 +1966,15 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 		(tq->tq_flags & (TASKQ_DYNAMIC
 		    | TASKQ_DUTY_CYCLE
 		    | TASKQ_DC_BATCH)) == 0)) {
+		/*
+		 * only set importance and FIXED,
+		 * don't touch QOS at all
+		 */
 		thread_is_timeshare = FALSE;
+		set_thread_importance_named(thread,
+		    pri, tq->tq_name);
+		set_thread_notimeshare_named(thread, tq->tq_name);
+		return;
 	} else {
 		thread_is_timeshare = TRUE;
 	}
