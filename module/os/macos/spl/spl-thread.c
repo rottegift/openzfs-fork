@@ -100,6 +100,16 @@ spl_thread_create_named_with_extpol_and_qos(
 	    filename, line);
 #endif
 
+	/* * * *
+	 * * * *
+	 * Here we want to have some wrapper that takes as
+	 * an argument { .proc = proc, .arg = arg, rendezvous = mtx} and waits
+	 * until it is told to make forward progress, after we have
+	 * twiddled with the settings.
+	 *
+	 * Alternatively, have the wrapper for proc do the settings
+	 * twiddling
+	 */
 	result = kernel_thread_start((thread_continue_t)proc, arg, &thread);
 
 	if (result != KERN_SUCCESS)
