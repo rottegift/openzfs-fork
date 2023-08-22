@@ -1957,14 +1957,19 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	 * (vdev_disk_taskq_scrub threads have been observed to rise to 93!)
 	 */
 
+
+	bool thread_is_timeshare;
+
 	/* BEGIN CSTYLED */
 	if (pri < minclsyspri ||
 	    (tq->tq_maxsize == 1 &&
 		(tq->tq_flags & (TASKQ_DYNAMIC
 		    | TASKQ_DUTY_CYCLE
 		    | TASKQ_DC_BATCH)) == 0)) {
+		thread_is_timeshare = FALSE;
 		set_thread_notimeshare_named(thread, tq->tq_name);
 	} else {
+		thread_is_timeshare = TRUE;
 		set_thread_timeshare_named(thread, tq->tq_name);
 	}
 	/* END CSTYLED */
@@ -1983,14 +1988,21 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	 * TIERs: 0 is USER_INTERACTIVE, 1 is USER_INITIATED, 1 is LEGACY,
 	 *        2 is UTILITY, 5 is BACKGROUND, 5 is MAINTENANCE
 	 */
+	const thread_throughput_qos_t unspecified_throughput =
+	    THROUGHPUT_QOS_TIER_UNSPECIFIED;
+	const thread_throughput_qos_t fixed_sched_throughput =
+	    unspecified_throughput;
 	const thread_throughput_qos_t std_throughput = THROUGHPUT_QOS_TIER_1;
 	const thread_throughput_qos_t sysdc_throughput = THROUGHPUT_QOS_TIER_1;
 	const thread_throughput_qos_t batch_throughput = THROUGHPUT_QOS_TIER_2;
 	const thread_throughput_qos_t minpri_throughput = batch_throughput;
 	const thread_throughput_qos_t dsl_scan_iss_throughput =
-	    THROUGHPUT_QOS_TIER_UNSPECIFIED;
+	    unspecified_throughput;
 
-	if (tq->tq_flags & TASKQ_DC_BATCH)
+	if (!thread_is_timeshare)
+		set_thread_throughput_named(thread,
+		    fixed_sched_throughput, tq->tq_name);
+	else if (tq->tq_flags & TASKQ_DC_BATCH)
 		set_thread_throughput_named(thread,
 		    batch_throughput, tq->tq_name);
 	else if (tq->tq_flags & TASKQ_DUTY_CYCLE)
@@ -2011,13 +2023,20 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	 *        1 is LEGACY, 3 is UTILITY, 3 is BACKGROUND,
 	 *        5 is MAINTENANCE
 	 */
+	const thread_latency_qos_t unspecified_latency =
+	    LATENCY_QOS_TIER_UNSPECIFIED;
+	const thread_latency_qos_t fixed_sched_latency =
+	    unspecified_latency;
 	const thread_latency_qos_t batch_latency = LATENCY_QOS_TIER_3;
 	const thread_latency_qos_t std_latency = LATENCY_QOS_TIER_1;
 	const thread_latency_qos_t minpri_latency = batch_latency;
 	const thread_latency_qos_t dsl_scan_iss_latency =
-	    LATENCY_QOS_TIER_UNSPECIFIED;
+	    unspecified_latency;
 
-	if (tq->tq_flags & TASKQ_DC_BATCH)
+	if (!thread_is_timeshare)
+		set_thread_latency_named(thread,
+		    fixed_sched_latency, tq->tq_name);
+	else if (tq->tq_flags & TASKQ_DC_BATCH)
 		set_thread_latency_named(thread,
 		    batch_latency, tq->tq_name);
 	else if (pri == minclsyspri)
