@@ -1942,6 +1942,7 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 {
 	pri_t pri = tq->tq_pri;
 
+	set_thread_notimeshare_named(thread, tq->tq_name);
 	set_thread_importance_named(thread,
 	    pri, tq->tq_name);
 

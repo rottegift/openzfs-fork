@@ -67,6 +67,7 @@ spl_thread_create_named(
 	if (result != KERN_SUCCESS)
 		return (NULL);
 
+	set_thread_notimeshare_named(thread, "anonymous new zfs thread");
 	set_thread_importance_named(thread, pri, "anonymous new zfs thread");
 
 	/*
@@ -322,7 +323,6 @@ set_thread_timeshare(thread_t thread)
 void
 set_thread_notimeshare_named(thread_t thread, const char *name)
 {
-#if 0
 	thread_extended_policy_data_t policy = { .timeshare = FALSE };
 	kern_return_t kret = thread_policy_set(thread,
 	    THREAD_EXTENDED_POLICY,
@@ -333,7 +333,6 @@ set_thread_notimeshare_named(thread_t thread, const char *name)
 		    " timeshare policy retval: %d, %s\n",
 		    __func__, __LINE__, kret, name);
 	}
-#endif
 }
 
 void
