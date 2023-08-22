@@ -1988,7 +1988,7 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	const thread_throughput_qos_t batch_throughput = THROUGHPUT_QOS_TIER_2;
 	const thread_throughput_qos_t minpri_throughput = batch_throughput;
 	const thread_throughput_qos_t dsl_scan_iss_throughput =
-	    THROUGHPUT_QOS_TIER_5;
+	    THROUGHPUT_QOS_TIER_UNSPECIFIED;
 
 	if (tq->tq_flags & TASKQ_DC_BATCH)
 		set_thread_throughput_named(thread,
@@ -2014,7 +2014,8 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	const thread_latency_qos_t batch_latency = LATENCY_QOS_TIER_3;
 	const thread_latency_qos_t std_latency = LATENCY_QOS_TIER_1;
 	const thread_latency_qos_t minpri_latency = batch_latency;
-	const thread_latency_qos_t dsl_scan_iss_latency = LATENCY_QOS_TIER_5;
+	const thread_latency_qos_t dsl_scan_iss_latency =
+	    LATENCY_QOS_TIER_UNSPECIFIED;
 
 	if (tq->tq_flags & TASKQ_DC_BATCH)
 		set_thread_latency_named(thread,
