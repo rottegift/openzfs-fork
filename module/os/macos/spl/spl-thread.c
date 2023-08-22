@@ -75,12 +75,14 @@ spl_thread_create_named(
 	 * except threads with priorities lower than minclsyspri
 	 */
 
+#if 0
 	if (pri >= minclsyspri)
 		set_thread_timeshare_named(thread,
 		    "anonymous new zfs thread");
 	else
 		set_thread_notimeshare_named(thread,
 		    "anonymous new loprio thread");
+#endif
 
 	if (name == NULL)
 		name = "unnamed zfs thread";
@@ -217,7 +219,7 @@ set_thread_throughput_named(thread_t thread,
 	 *
 	 *  (from xnu/osfmk/kern/thread_policy.c)
 	 */
-
+#if 0
 	thread_throughput_qos_policy_data_t qosp = { 0 };
 	qosp.thread_throughput_qos_tier = throughput;
 
@@ -232,6 +234,7 @@ set_thread_throughput_named(thread_t thread,
 		    __func__, __LINE__, qoskret,
 		    qosp.thread_throughput_qos_tier, name);
 	}
+#endif
 }
 
 void
@@ -246,6 +249,7 @@ void
 set_thread_latency_named(thread_t thread,
     thread_latency_qos_t latency, const char *name)
 {
+#if 0
 	/*
 	 * TIERs: 0 is USER_INTERACTIVE, 1 is USER_INITIATED, 1 is LEGACY,
 	 *        3 is UTILITY, 3 is BACKGROUND, 5 is MAINTENANCE
@@ -268,6 +272,7 @@ set_thread_latency_named(thread_t thread,
 		    qoskret, qosp.thread_latency_qos_tier,
 		    name);
 	}
+#endif
 }
 
 void
@@ -289,6 +294,7 @@ set_thread_latency(thread_t thread,
 void
 set_thread_timeshare_named(thread_t thread, const char *name)
 {
+#if 0
 	thread_extended_policy_data_t policy = { .timeshare = TRUE };
 	kern_return_t kret = thread_policy_set(thread,
 	    THREAD_EXTENDED_POLICY,
@@ -299,6 +305,7 @@ set_thread_timeshare_named(thread_t thread, const char *name)
 		    " timeshare policy retval: %d, %s\n",
 		    __func__, __LINE__, kret, name);
 	}
+#endif
 }
 
 void
@@ -315,6 +322,7 @@ set_thread_timeshare(thread_t thread)
 void
 set_thread_notimeshare_named(thread_t thread, const char *name)
 {
+#if 0
 	thread_extended_policy_data_t policy = { .timeshare = FALSE };
 	kern_return_t kret = thread_policy_set(thread,
 	    THREAD_EXTENDED_POLICY,
@@ -325,6 +333,7 @@ set_thread_notimeshare_named(thread_t thread, const char *name)
 		    " timeshare policy retval: %d, %s\n",
 		    __func__, __LINE__, kret, name);
 	}
+#endif
 }
 
 void

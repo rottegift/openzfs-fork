@@ -1942,6 +1942,11 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 {
 	pri_t pri = tq->tq_pri;
 
+	set_thread_importance_named(thread,
+	    pri, tq->tq_name);
+
+#if 0
+
 	/*
 	 * Timeshare lets the system adjust the priority up or down depending
 	 * on system activity; on newer macOS this is the default behaviour
@@ -1956,7 +1961,6 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 	 * priority on idle systems or with unexpectedly good behaviour
 	 * (vdev_disk_taskq_scrub threads have been observed to rise to 93!)
 	 */
-
 
 	bool thread_is_timeshare;
 
@@ -2059,6 +2063,7 @@ set_taskq_thread_attributes(thread_t thread, taskq_t *tq)
 		set_thread_timeshare_named(thread, tq->tq_name);
 	else
 		set_thread_notimeshare_named(thread, tq->tq_name);
+#endif
 }
 
 #endif // __APPLE__
