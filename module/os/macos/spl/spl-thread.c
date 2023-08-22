@@ -54,6 +54,44 @@ spl_thread_create_named(
 #endif
     pri_t pri)
 {
+	thread_extended_policy_data_t tmsharepol = {
+		.timeshare = TRUE
+	};
+
+	return (spl_thread_create_named_with_extpol_and_qos(
+	    &tmsharepol, NULL, NULL,
+	    name, stk, stksize, proc, arg,
+	    len, state,
+#ifdef SPL_DEBUG_THREAD
+	    filename, line,
+#endif
+	    pri));
+}
+
+/*
+ * For each of the first three args, if NULL then kernel default
+ *
+ * no timesharing, no througput qos, no latency qos
+ */
+
+kthread_t *
+spl_thread_create_named_with_extpol_and_qos(
+    thread_extended_policy_data_t *tmsharepol,
+    thread_throughput_qos_policy_data_t *thoughpol,
+    thread_latency_qos_policy_t *latpol,
+    const char *name,
+    caddr_t stk,
+    size_t stksize,
+    void (*proc)(void *),
+    void *arg,
+    size_t len,
+    int state,
+#ifdef SPL_DEBUG_THREAD
+    const char *filename,
+    int line,
+#endif
+    pri_t pri)
+{
 	kern_return_t result;
 	thread_t thread;
 
@@ -67,10 +105,27 @@ spl_thread_create_named(
 	if (result != KERN_SUCCESS)
 		return (NULL);
 
-	set_thread_importance_named(thread, pri, "anonymous new zfs thread");
+	set_thread_importance(thread, pri, "anonymous new zfs thread");
 
-	/* all threads default to TIMESHARE */
-	set_thread_timeshare_named(thread, "anonymous new zfs thread");
+	/* set up thread */
+
+	if (tmsharepol) {
+		spl_set_thread_timeshare(thread, tmsharepol, name);
+	}
+
+	if (throughpol) {
+		if (tmsharepol) {
+			ASSERT(tmshare->timeshare, name);
+		}
+		spl_set_thread_throughput(thread, throughpol, name);
+	}
+
+	if (latpol) {
+		if (tmsharepol) {
+			ASSERT(tmshare->timeshare);
+		}
+		spl_set_thread_latency(thread, latpol);
+	}
 
 	if (name == NULL)
 		name = "unnamed zfs thread";
@@ -146,7 +201,7 @@ timeout_generic(int type, void (*func)(void *), void *arg,
  */
 
 void
-set_thread_importance_named(thread_t thread, pri_t pri, const char *name)
+spl_set_thread_importance(thread_t thread, pri_t pri, const char *name)
 {
 	thread_precedence_policy_data_t policy = { 0 };
 
@@ -187,29 +242,30 @@ set_thread_importance_named(thread_t thread, pri_t pri, const char *name)
 	}
 }
 
-void
-set_thread_importance(thread_t thread, pri_t pri)
-{
-	set_thread_importance_named(thread, pri, "anonymous zfs thread");
-}
-
 /*
  * Set a kernel throughput qos for this thread,
  */
 
 void
-set_thread_throughput_named(thread_t thread,
-    thread_throughput_qos_t throughput, const char *name)
+spl_set_thread_throughput(thread_t thread,
+    thread_throughput_qos_t *throughput, const char *name)
 {
-	/*
+
+
+	ASSERT(throughput);
+
+	if (!throughput)
+		return;
+
+	if (!name)
+		name = "anonymous zfs thread (throughput)";
+
+        /*
 	 * TIERs: 0 is USER_INTERACTIVE, 1 is USER_INITIATED, 1 is LEGACY,
 	 *        2 is UTILITY, 5 is BACKGROUND, 5 is MAINTENANCE
 	 *
 	 *  (from xnu/osfmk/kern/thread_policy.c)
 	 */
-
-	thread_throughput_qos_policy_data_t qosp = { 0 };
-	qosp.thread_throughput_qos_tier = throughput;
 
 	kern_return_t qoskret = thread_policy_set(thread,
 	    THREAD_THROUGHPUT_QOS_POLICY,
@@ -225,46 +281,39 @@ set_thread_throughput_named(thread_t thread,
 }
 
 void
-set_thread_throughput(thread_t thread,
-    thread_throughput_qos_t throughput)
+spl_set_thread_latency(thread_t thread,
+    thread_latency_qos_t *latency, const char *name)
 {
-	set_thread_throughput_named(thread, throughput,
-	    "anonymous zfs function");
-}
 
-void
-set_thread_latency_named(thread_t thread,
-    thread_latency_qos_t latency, const char *name)
-{
-	/*
+	ASSERT(latency);
+
+	if (!latency)
+		return;
+
+	if (!name)
+		name = "anonymous zfs thread (latency)";
+
+        /*
 	 * TIERs: 0 is USER_INTERACTIVE, 1 is USER_INITIATED, 1 is LEGACY,
 	 *        3 is UTILITY, 3 is BACKGROUND, 5 is MAINTENANCE
 	 *
 	 *  (from xnu/osfmk/kern/thread_policy.c)
+	 *
 	 * NB: these differ from throughput tier mapping
 	 */
 
-	thread_latency_qos_policy_data_t qosp = { 0 };
-	qosp.thread_latency_qos_tier = latency;
 	kern_return_t qoskret = thread_policy_set(thread,
 	    THREAD_LATENCY_QOS_POLICY,
-	    (thread_policy_t)&qosp,
+	    (thread_policy_t) policy,
 	    THREAD_LATENCY_QOS_POLICY_COUNT);
 	if (qoskret != KERN_SUCCESS) {
 		printf("SPL: %s:%d: WARNING failed to set"
-		    " thread latency policy retval: %d "
-		    " (THREAD_LATENCY_QOS_POLICY %x), %s",
+		    " thread latency policy to %x, retval: %d, '%s'\n",
 		    __func__, __LINE__,
-		    qoskret, qosp.thread_latency_qos_tier,
+		    latency->thread_latency_qos_tier,
+		    qoskret,
 		    name);
 	}
-}
-
-void
-set_thread_latency(thread_t thread,
-    thread_latency_qos_t latency)
-{
-	set_thread_latency_named(thread, latency, "anonymous zfs function");
 }
 
 /*
@@ -277,48 +326,31 @@ set_thread_latency(thread_t thread,
  */
 
 void
-set_thread_timeshare_named(thread_t thread, const char *name)
+spl_set_thread_timeshare(thread_t thread,
+    thread_extended_policy_data_t *policy,
+    const char *name)
 {
-	thread_extended_policy_data_t policy = { .timeshare = TRUE };
+
+	ASSERT(policy);
+
+	if (!policy)
+		return;
+
+	if (!name) {
+		if (policy->timeshare)
+			name = "anonymous zfs thread (timeshare->off)";
+		else
+			name = "anonymous zfs thread (timeshare->on)";
+	}
+
 	kern_return_t kret = thread_policy_set(thread,
 	    THREAD_EXTENDED_POLICY,
 	    (thread_policy_t)&policy,
 	    THREAD_EXTENDED_POLICY_COUNT);
 	if (kret != KERN_SUCCESS) {
 		printf("SPL: %s:%d: WARNING failed to set"
-		    " timeshare policy retval: %d, %s\n",
-		    __func__, __LINE__, kret, name);
+		    " timeshare policy to %d, retval: %d, %s\n",
+		    __func__, __LINE__, kret,
+		    policy->timeshare, name);
 	}
-}
-
-void
-set_thread_timeshare(thread_t thread)
-{
-	set_thread_timeshare_named(thread, "anonymous zfs function");
-}
-
-/*
- * Although this repeats some of the above, there is likely to be different
- * debugging (e.g. ASSERT) compared to the set functions above.
- */
-
-void
-set_thread_notimeshare_named(thread_t thread, const char *name)
-{
-	thread_extended_policy_data_t policy = { .timeshare = FALSE };
-	kern_return_t kret = thread_policy_set(thread,
-	    THREAD_EXTENDED_POLICY,
-	    (thread_policy_t)&policy,
-	    THREAD_EXTENDED_POLICY_COUNT);
-	if (kret != KERN_SUCCESS) {
-		printf("SPL: %s:%d: WARNING failed to UNSET"
-		    " timeshare policy retval: %d, %s\n",
-		    __func__, __LINE__, kret, name);
-	}
-}
-
-void
-set_thread_notimeshare(thread_t thread)
-{
-	set_thread_notimeshare_named(thread, "anonymous zfs nontimeshare");
 }
