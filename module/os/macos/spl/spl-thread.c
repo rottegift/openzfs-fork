@@ -39,6 +39,27 @@
 
 uint64_t zfs_threads = 0;
 
+extern lck_grp_attr_t	*spl_lck_group = NULL;
+extern lck_attr_t	*spl_lck_attr = NULL;
+
+typedef struct initialize_thread_args {
+	lck_mtx_t *lck;
+	const char *child_name;
+	void (*proc)(void *);
+	void *arg;
+	pri_t pri;
+	int state;
+	thread_extended_policy_data_t *tmsharepol;
+	thread_throughput_qos_policy_data_t *throughpol;
+	thread_latency_qos_policy_data_t *latpol;
+	int child_done;
+	void *wait_channel;
+#ifdef SPL_DEBUG_THREAD
+	const char *caller_filename;
+	int caller_line;
+#endif
+} initialize_thread_args_t;
+
 kthread_t *
 spl_thread_create_named(
     const char *name,
@@ -73,11 +94,10 @@ spl_thread_create_named(
  *
  * no timesharing, no througput qos, no latency qos
  */
-
 kthread_t *
 spl_thread_create_named_with_extpol_and_qos(
     thread_extended_policy_data_t *tmsharepol,
-    thread_throughput_qos_policy_data_t *thoughpol,
+    thread_throughput_qos_policy_data_t *throughpol,
     thread_latency_qos_policy_t *latpol,
     const char *name,
     caddr_t stk,
@@ -110,11 +130,57 @@ spl_thread_create_named_with_extpol_and_qos(
 	 * Alternatively, have the wrapper for proc do the settings
 	 * twiddling
 	 */
-	result = kernel_thread_start((thread_continue_t)proc, arg, &thread);
 
-	if (result != KERN_SUCCESS)
+
+	uint64_t wait_location;
+
+	lck_mtx_t lck;
+
+	lck_mtx_init(&lck, spl_mtx_grp, spl_mtx_attr);
+
+	initialize_thread_args_t childargs = {
+		.lck = &lck,
+		.child_name = name,
+		.proc = proc,
+		.arg = arg,
+		.pri = pri,
+		.state = state,
+		.tmsharepol = tmsharepol,
+		.throughpol = throughpol,
+		.latpol = latpol,
+		.child_done = 0,
+		.wait_channel = &wait_location,
+#ifdef SPL_DEBUG_THREAD
+		.caller_filename = filename,
+		.caller_line = line,
+#endif
+	};
+
+	spl_data_barrier();
+	lck_mtx_lock(&lck);
+	spl_data_barrier();
+
+	result = kernel_thread_start((thread_continue_t)spl_thread_setup,
+	    &childargs, &thread);
+
+	if (result != KERN_SUCCESS) {
+		lck_mtx_unlock(&lck);
+		lck_mtx_destroy(&lck, spl_mtx_grp);
+		printf("SPL: %s:%d kernel_thread_start error return %d\n",
+		    __func__, __LINE__, result);
 		return (NULL);
+	}
 
+	for ( ; ; ) {
+		spl_data_barrier();
+		(void) msleep(&wait_location, &lck, PRIBIO,
+		    "spl thread initialization", 0);
+		spl_data_barrier();
+		if (childargs.child_done != 0)
+			break;
+	}
+
+/**** DO THE BELOW IN THE CHILD THREAD ****/
 	set_thread_importance(thread, pri, "anonymous new zfs thread");
 
 	/* set up thread */
