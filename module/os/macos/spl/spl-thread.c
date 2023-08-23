@@ -42,7 +42,7 @@ uint64_t zfs_threads = 0;
 typedef struct initialize_thread_args {
 	lck_mtx_t *lck;
 	const char *child_name;
-	thread_continue_t proc;
+	thread_func_t proc;
 	void *arg;
 	pri_t pri;
 	int state;
@@ -107,7 +107,7 @@ spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
 
 	/* save proc and args */
 
-	thread_continue_t proc = a->proc;
+	thread_func_t proc = a->proc;
 	void *arg = a->arg;
 
 	/* set done with setup flag, wake parent, release lck */
@@ -130,7 +130,7 @@ spl_thread_create_named(
     const char *name,
     caddr_t stk,
     size_t stksize,
-    thread_continuation_t proc,
+    thread_func_t proc,
     void *arg,
     size_t len,
     int state,
@@ -225,7 +225,7 @@ spl_thread_create_named_with_extpol_and_qos(
 	lck_mtx_lock(&lck);
 	spl_data_barrier();
 
-	result = kernel_thread_start((thread_continue_t)spl_thread_setup,
+	result = kernel_thread_start(spl_thread_setup,
 	    &childargs, &thread);
 
 	if (result != KERN_SUCCESS) {
