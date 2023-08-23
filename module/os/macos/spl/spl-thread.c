@@ -39,9 +39,6 @@
 
 uint64_t zfs_threads = 0;
 
-extern lck_grp_attr_t	*spl_lck_group = NULL;
-extern lck_attr_t	*spl_lck_attr = NULL;
-
 typedef struct initialize_thread_args {
 	lck_mtx_t *lck;
 	const char *child_name;
@@ -70,7 +67,7 @@ spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
 
 	/* we have been created!  sanity check and take lock */
 	spl_data_barrier();
-	VERIFY(a, !=, NULL);
+	VERIFY3P(a, !=, NULL);
 
 	lck_mtx_lock(a->lck);
 	spl_data_barrier();
@@ -82,14 +79,14 @@ spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
 
 #if	defined(MAC_OS_X_VERSION_10_15) &&				\
 	(MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_15)
-	thread_set_thread_name(thread, a->child_name);
+	thread_set_thread_name(current_thread(), a->child_name);
 #endif
 
-	set_thread_importance(current_thread(), pri, a->child_name);
+	spl_set_thread_importance(current_thread(), a->pri, a->child_name);
 
 	if (a->tmsharepol) {
 		spl_set_thread_timeshare(current_thread(),
-		    a->tmsharepol, name);
+		    a->tmsharepol, a->child_name);
 	}
 
 	if (a->throughpol) {
@@ -97,7 +94,7 @@ spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
 			ASSERT(a->tmsharepol->timeshare);
 		}
 		spl_set_thread_throughput(current_thread(),
-		    a->throughpol, name);
+		    a->throughpol, a->child_name);
 	}
 
 	if (a->latpol) {
@@ -105,7 +102,7 @@ spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
 			ASSERT(a->tmsharepol->timeshare);
 		}
 		spl_set_thread_latency(current_thread(),
-		    a->latpol, name);
+		    a->latpol, a->child_name);
 	}
 
 	/* save proc and args */
@@ -125,6 +122,7 @@ spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
 
 	proc(arg, wr);
 	__builtin_unreachable();
+	panic("SPL: proc called from spl_thread_setup() returned");
 }
 
 kthread_t *
@@ -132,7 +130,7 @@ spl_thread_create_named(
     const char *name,
     caddr_t stk,
     size_t stksize,
-    void (*proc)(void *),
+    thread_continuation_t proc,
     void *arg,
     size_t len,
     int state,

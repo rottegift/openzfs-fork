@@ -88,7 +88,7 @@ typedef void (*thread_func_t)(void *);
 
 extern kthread_t *spl_thread_create_named(const char *name,
     caddr_t stk, size_t stksize,
-    void (*proc)(void *), void *arg, size_t len, /* proc_t *pp, */ int state,
+    thread_continue_t proc, void *arg, size_t len, /* proc_t *pp, */ int state,
     const char *, int, pri_t pri);
 
 extern kthread_t *spl_thread_create_named_with_extpol_and_qos(
@@ -97,9 +97,8 @@ extern kthread_t *spl_thread_create_named_with_extpol_and_qos(
     thread_latency_qos_policy_t *latpol,
     const char *name,
     caddr_t stk, size_t stksize,
-    void (*proc)(void *), void *arg, size_t len, /* proc_t *pp, */ int state,
+    thread_continue_t proc, void *arg, size_t len, /* proc_t *pp, */ int state,
     const char *, int, pri_t pri);
-
 
 #else
 
@@ -114,7 +113,8 @@ extern kthread_t *spl_thread_create_named_with_extpol_and_qos(
 
 extern kthread_t *spl_thread_create_named(const char *name,
     caddr_t stk, size_t stksize,
-    void (*proc)(void *), void *arg, size_t len, /* proc_t *pp, */ int state,
+    thread_continue_t proc, void *arg, size_t len,
+    /* proc_t *pp, */ int state,
     pri_t pri);
 
 extern kthread_t *spl_thread_create_named_with_extpol_and_qos(
@@ -123,7 +123,8 @@ extern kthread_t *spl_thread_create_named_with_extpol_and_qos(
     thread_latency_qos_policy_t *latpol,
     const char *name,
     caddr_t stk, size_t stksize,
-    void (*proc)(void *), void *arg, size_t len, /* proc_t *pp, */ int state,
+    thread_continue_t proc,
+    void *arg, size_t len, /* proc_t *pp, */ int state,
     pri_t pri);
 
 #endif

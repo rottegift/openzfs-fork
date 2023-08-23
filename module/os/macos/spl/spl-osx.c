@@ -440,7 +440,7 @@ spl_start(kmod_info_t *ki, void *d)
 	 * system, where those are available either late or may require
 	 * memory or thread allocation
 	 */
-	spl_mtx_lck_grp  = lck_attr_alloc_init();
+	spl_mtx_lck_attr  = lck_attr_alloc_init();
 	spl_mtx_grp_attr = lck_grp_attr_alloc_init();
 	spl_mtx_grp = lck_grp_alloc_init("spl-mutex", spl_mtx_grp_attr);
 
@@ -551,11 +551,11 @@ spl_stop(kmod_info_t *ki, void *d)
 	spl_kstat_fini();
 	spl_mutex_subsystem_fini();
 
-	lck_attr_free(spl_mtx_lck_grp);
-	spl_mtx_lck_grp = NULL;
+	lck_attr_free(spl_mtx_lck_attr);
+	spl_mtx_lck_attr= NULL;
 	lck_grp_attr_free(spl_mtx_grp_attr);
-	spl_mtx_attr_grp = NULL;
-	lck_attr_grp_free(spl_mtx_grp);
+	spl_mtx_grp_attr = NULL;
+	lck_grp_free(spl_mtx_grp);
 	spl_mtx_grp = NULL;
 
 	return (KERN_SUCCESS);
