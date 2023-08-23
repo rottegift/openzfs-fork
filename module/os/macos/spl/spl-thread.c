@@ -45,7 +45,7 @@ extern lck_attr_t	*spl_lck_attr = NULL;
 typedef struct initialize_thread_args {
 	lck_mtx_t *lck;
 	const char *child_name;
-	void (*proc)(void *);
+	thread_continue_t proc;
 	void *arg;
 	pri_t pri;
 	int state;
@@ -59,6 +59,73 @@ typedef struct initialize_thread_args {
 	int caller_line;
 #endif
 } initialize_thread_args_t;
+
+/*
+ * do setup work inside the child thread, then launch
+ * the work, proc(arg)
+ */
+void
+spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
+{
+
+	/* we have been created!  sanity check and take lock */
+	spl_data_barrier();
+	VERIFY(a, !=, NULL);
+
+	lck_mtx_lock(a->lck);
+	spl_data_barrier();
+
+	/* set things up */
+
+	if (a->child_name == NULL)
+		a->child_name = "anonymous zfs thread";
+
+#if	defined(MAC_OS_X_VERSION_10_15) &&				\
+	(MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_15)
+	thread_set_thread_name(thread, a->child_name);
+#endif
+
+	set_thread_importance(current_thread(), pri, a->child_name);
+
+	if (a->tmsharepol) {
+		spl_set_thread_timeshare(current_thread(),
+		    a->tmsharepol, name);
+	}
+
+	if (a->throughpol) {
+		if (a->tmsharepol) {
+			ASSERT(a->tmsharepol->timeshare);
+		}
+		spl_set_thread_throughput(current_thread(),
+		    a->throughpol, name);
+	}
+
+	if (a->latpol) {
+		if (a->tmsharepol) {
+			ASSERT(a->tmsharepol->timeshare);
+		}
+		spl_set_thread_latency(current_thread(),
+		    a->latpol, name);
+	}
+
+	/* save proc and args */
+
+	thread_continue_t proc = a->proc;
+	void *arg = a->arg;
+
+	/* set done with setup flag, wake parent, release lck */
+
+	a->child_done = 1;
+	spl_data_barrier();
+	wakeup_one(a->wait_channel);
+	spl_data_barrier();
+	lck_mtx_unlock(a->lck);
+
+	/* jump to proc, which doesn't come back here */
+
+	proc(arg, wr);
+	__builtin_unreachable();
+}
 
 kthread_t *
 spl_thread_create_named(
@@ -102,7 +169,7 @@ spl_thread_create_named_with_extpol_and_qos(
     const char *name,
     caddr_t stk,
     size_t stksize,
-    void (*proc)(void *),
+    thread_continue_t proc,
     void *arg,
     size_t len,
     int state,
@@ -180,40 +247,12 @@ spl_thread_create_named_with_extpol_and_qos(
 			break;
 	}
 
-/**** DO THE BELOW IN THE CHILD THREAD ****/
-	set_thread_importance(thread, pri, "anonymous new zfs thread");
-
-	/* set up thread */
-
-	if (tmsharepol) {
-		spl_set_thread_timeshare(thread, tmsharepol, name);
-	}
-
-	if (throughpol) {
-		if (tmsharepol) {
-			ASSERT(tmshare->timeshare, name);
-		}
-		spl_set_thread_throughput(thread, throughpol, name);
-	}
-
-	if (latpol) {
-		if (tmsharepol) {
-			ASSERT(tmshare->timeshare);
-		}
-		spl_set_thread_latency(thread, latpol);
-	}
-
-	if (name == NULL)
-		name = "unnamed zfs thread";
-
-#if	defined(MAC_OS_X_VERSION_10_15) && \
-	(MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_15)
-	thread_set_thread_name(thread, name);
-#endif
-
 	thread_deallocate(thread);
 
 	atomic_inc_64(&zfs_threads);
+
+	lck_mtx_unlock(&lck);
+	lck_mtx_destroy(&lck, spl_mtx_grp);
 
 	return ((kthread_t *)thread);
 }
