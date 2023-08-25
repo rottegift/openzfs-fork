@@ -36,6 +36,7 @@
 #include <sys/systm.h>
 #include <TargetConditionals.h>
 #include <AvailabilityMacros.h>
+#include <sys/mutex.h>
 
 uint64_t zfs_threads = 0;
 
@@ -62,12 +63,14 @@ typedef struct initialize_thread_args {
  * the work, proc(arg)
  */
 void
-spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
+spl_thread_setup(void *v, wait_result_t wr)
 {
 
 	/* we have been created!  sanity check and take lock */
 	spl_data_barrier();
-	VERIFY3P(a, !=, NULL);
+	VERIFY3P(v, !=, NULL);
+
+	initialize_thread_args_t *a = v;
 
 	lck_mtx_lock(a->lck);
 	spl_data_barrier();
@@ -120,7 +123,7 @@ spl_thread_setup(initialize_thread_args_t *a, wait_result_t wr)
 
 	/* jump to proc, which doesn't come back here */
 
-	proc(arg, wr);
+	proc(arg);
 	__builtin_unreachable();
 	panic("SPL: proc called from spl_thread_setup() returned");
 }
@@ -167,7 +170,7 @@ spl_thread_create_named_with_extpol_and_qos(
     const char *name,
     caddr_t stk,
     size_t stksize,
-    thread_continue_t proc,
+    thread_func_t proc,
     void *arg,
     size_t len,
     int state,
@@ -199,12 +202,12 @@ spl_thread_create_named_with_extpol_and_qos(
 
 	uint64_t wait_location;
 
-	lck_mtx_t lck;
+	wrapper_mutex_t lck;
 
-	lck_mtx_init(&lck, spl_mtx_grp, spl_mtx_attr);
+	lck_mtx_init((lck_mtx_t *)&lck, spl_mtx_grp, spl_mtx_lck_attr);
 
 	initialize_thread_args_t childargs = {
-		.lck = &lck,
+		.lck = (lck_mtx_t *)&lck,
 		.child_name = name,
 		.proc = proc,
 		.arg = arg,
@@ -222,15 +225,15 @@ spl_thread_create_named_with_extpol_and_qos(
 	};
 
 	spl_data_barrier();
-	lck_mtx_lock(&lck);
+	lck_mtx_lock((lck_mtx_t *)&lck);
 	spl_data_barrier();
 
 	result = kernel_thread_start(spl_thread_setup,
-	    &childargs, &thread);
+	    (void *)&childargs, &thread);
 
 	if (result != KERN_SUCCESS) {
-		lck_mtx_unlock(&lck);
-		lck_mtx_destroy(&lck, spl_mtx_grp);
+		lck_mtx_unlock((lck_mtx_t *)&lck);
+		lck_mtx_destroy((lck_mtx_t *)&lck, spl_mtx_grp);
 		printf("SPL: %s:%d kernel_thread_start error return %d\n",
 		    __func__, __LINE__, result);
 		return (NULL);
@@ -238,7 +241,7 @@ spl_thread_create_named_with_extpol_and_qos(
 
 	for ( ; ; ) {
 		spl_data_barrier();
-		(void) msleep(&wait_location, &lck, PRIBIO,
+		(void) msleep(&wait_location, (lck_mtx_t *)&lck, PRIBIO,
 		    "spl thread initialization", 0);
 		spl_data_barrier();
 		if (childargs.child_done != 0)
@@ -249,8 +252,8 @@ spl_thread_create_named_with_extpol_and_qos(
 
 	atomic_inc_64(&zfs_threads);
 
-	lck_mtx_unlock(&lck);
-	lck_mtx_destroy(&lck, spl_mtx_grp);
+	lck_mtx_unlock((lck_mtx_t *)&lck);
+	lck_mtx_destroy((lck_mtx_t *)&lck, spl_mtx_grp);
 
 	return ((kthread_t *)thread);
 }
@@ -361,7 +364,7 @@ spl_set_thread_importance(thread_t thread, pri_t pri, const char *name)
 
 void
 spl_set_thread_throughput(thread_t thread,
-    thread_throughput_qos_t *throughput, const char *name)
+    thread_throughput_qos_policy_t throughput, const char *name)
 {
 
 
@@ -382,20 +385,20 @@ spl_set_thread_throughput(thread_t thread,
 
 	kern_return_t qoskret = thread_policy_set(thread,
 	    THREAD_THROUGHPUT_QOS_POLICY,
-	    (thread_policy_t)&qosp,
+	    (thread_policy_t)throughput,
 	    THREAD_THROUGHPUT_QOS_POLICY_COUNT);
 	if (qoskret != KERN_SUCCESS) {
 		printf("SPL: %s:%d: WARNING failed to set"
 		    " thread throughput policy retval: %d "
 		    " (THREAD_THROUGHPUT_QOS_POLICY %x), %s\n",
 		    __func__, __LINE__, qoskret,
-		    qosp.thread_throughput_qos_tier, name);
+		    throughput->thread_throughput_qos_tier, name);
 	}
 }
 
 void
 spl_set_thread_latency(thread_t thread,
-    thread_latency_qos_t *latency, const char *name)
+    thread_latency_qos_policy_t latency, const char *name)
 {
 
 	ASSERT(latency);
@@ -417,7 +420,7 @@ spl_set_thread_latency(thread_t thread,
 
 	kern_return_t qoskret = thread_policy_set(thread,
 	    THREAD_LATENCY_QOS_POLICY,
-	    (thread_policy_t) policy,
+	    (thread_policy_t)latency,
 	    THREAD_LATENCY_QOS_POLICY_COUNT);
 	if (qoskret != KERN_SUCCESS) {
 		printf("SPL: %s:%d: WARNING failed to set"
@@ -440,7 +443,7 @@ spl_set_thread_latency(thread_t thread,
 
 void
 spl_set_thread_timeshare(thread_t thread,
-    thread_extended_policy_data_t *policy,
+    thread_extended_policy_t policy,
     const char *name)
 {
 
@@ -458,7 +461,7 @@ spl_set_thread_timeshare(thread_t thread,
 
 	kern_return_t kret = thread_policy_set(thread,
 	    THREAD_EXTENDED_POLICY,
-	    (thread_policy_t)&policy,
+	    (thread_policy_t)policy,
 	    THREAD_EXTENDED_POLICY_COUNT);
 	if (kret != KERN_SUCCESS) {
 		printf("SPL: %s:%d: WARNING failed to set"
