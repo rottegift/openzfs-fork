@@ -1868,6 +1868,81 @@ taskq_thread_wait(taskq_t *tq, kmutex_t *mx, kcondvar_t *cv,
 }
 
 #ifdef __APPLE__
+
+/*
+ * Create a thread with appropriate importance and QOS
+ */
+
+static kthread_t *
+spl_taskq_thread_create_named(const char *name,
+    taskq_t *tq,
+    caddr_t stk,
+    size_t stkzise,
+    thread_func_t proc,
+    void *arg,
+    size_t len,
+    int state,
+    pri_t pri)
+{
+
+	kthread_t *new_thread = NULL;
+	/*
+	 * We pass pri along, but use it to determine
+	 * what QOS to pass along as well
+	 */
+
+	if (pri < minclsyspri) {
+		/*
+		 * these are dsl_scan asynchronous reads,
+		 * and need neither QOS nor timesharing
+		 */
+		thread_extended_policy_data_t timeshare = {
+			.timeshare = 0,
+		};
+		new_thread =
+		    spl_thread_create_named_with_extpol_and_qos(
+			&timeshare, NULL, NULL,
+			name, stk, stksize, proc, arg, len, state, pri);
+	} else if (tq->tq_maxsize == 1 &&
+	    (tq->tq_flags & (TASKQ_DYNAMIC
+		| TASKQ_THREADS_CPU_PCT
+		| TASKQ_DUTY_CYCLE
+		| TASKQ_DC_BATCH) == 0)) {
+		/*
+		 * This is a strict-FIFO taskq, which should be held at a
+		 * stable priority so that the immediately previous job on
+		 * this sole worker thread has not left the scheduler with the
+		 * wrong opinion of the job that is to come.  TIMESHARE could
+		 * let a well-behaved previous job might lead to an
+		 * over-prioritization of the subsequent job.
+		 */
+		thread_extended_policy_data_t timeshare = {
+			.timeshare = 0,
+		};
+		new_thread =
+		    spl_thread_create_named_with_extpol_and_qos(
+			&timeshare, NULL, NULL,
+			name, stk, stksize, proc, arg, len, state, pri);
+	} else if (tq->tq_flags & TASKQ_DUTY_CYCLE) {
+		/*
+		 * SDC scheduling class, the sysdc threads.
+		 * This is cpu-intensive workload.
+		 * We need the "duty cycle" (DC)
+		 * from tq->tq_DC, which is a percentage
+		 * of CPU
+		 */
+		ASSERT3U(tq->tq_DC, <=, 100);
+		ASSERT3U(tq->tq_DC, >, 0);
+
+	} else if (tq->tq_flags & TASKQ_DC_BATCH) {
+	} else if (pri < maxclsyspri) {
+
+	} else {
+		/* maxclsyspri */
+	}
+
+}
+
 /*
  * Adjust thread policies for SYSDC and BATCH task threads
  */
@@ -2042,10 +2117,6 @@ taskq_thread(void *arg)
 	callb_cpr_t cprinfo;
 	hrtime_t start, end;
 	boolean_t freeit;
-
-#ifdef __APPLE__
-	set_taskq_thread_attributes(current_thread(), tq);
-#endif
 
 	CALLB_CPR_INIT(&cprinfo, &tq->tq_lock, callb_generic_cpr,
 	    tq->tq_name);
@@ -2781,11 +2852,10 @@ taskq_bucket_extend(void *arg)
 	 * for it to be initialized (below).
 	 */
 	tqe->tqent_thread = (kthread_t *)0xCEDEC0DE;
-	thread = thread_create_named(tq->tq_name,
+
+	thread = spl_taskq_thread_create_named(tq->tq_name,
 	    NULL, 0, (void (*)(void *))taskq_d_thread,
 	    tqe, 0, pp0, TS_RUN, tq->tq_pri);
-
-	set_taskq_thread_attributes(thread, tq);
 #else
 
 	/*
