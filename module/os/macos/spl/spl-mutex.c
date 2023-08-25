@@ -39,6 +39,13 @@
 // Not defined in headers
 extern boolean_t lck_mtx_try_lock(lck_mtx_t *lck);
 
+/*
+ * SPL mutexes: use the XNU interface, rather than the ones below,
+ * initialized in spl-osx.c and used in spl-thread.c
+ */
+lck_grp_attr_t	*spl_mtx_grp_attr;
+lck_attr_t	*spl_mtx_lck_attr;
+lck_grp_t	*spl_mtx_grp;
 
 static lck_attr_t	*zfs_lock_attr = NULL;
 static lck_grp_attr_t	*zfs_group_attr = NULL;
