@@ -46,9 +46,9 @@ typedef struct initialize_thread_args {
 	void *arg;
 	pri_t pri;
 	int state;
-	thread_extended_policy_data_t *tmsharepol;
-	thread_throughput_qos_policy_data_t *throughpol;
-	thread_latency_qos_policy_data_t *latpol;
+	thread_extended_policy_t tmsharepol;
+	thread_throughput_qos_policy_t throughpol;
+	thread_latency_qos_policy_t latpol;
 	int child_done;
 	void *wait_channel;
 #ifdef SPL_DEBUG_THREAD
@@ -161,9 +161,9 @@ spl_thread_create_named(
  */
 kthread_t *
 spl_thread_create_named_with_extpol_and_qos(
-    thread_extended_policy_data_t *tmsharepol,
-    thread_throughput_qos_policy_data_t *throughpol,
-    thread_latency_qos_policy_t *latpol,
+    thread_extended_policy_t tmsharepol,
+    thread_throughput_qos_policy_t throughpol,
+    thread_latency_qos_policy_t latpol,
     const char *name,
     caddr_t stk,
     size_t stksize,

@@ -92,9 +92,9 @@ extern kthread_t *spl_thread_create_named(const char *name,
     const char *, int, pri_t pri);
 
 extern kthread_t *spl_thread_create_named_with_extpol_and_qos(
-    thread_extended_policy_data_t *tmsharepol,
-    thread_throughput_qos_policy_data_t *thoughpol,
-    thread_latency_qos_policy_t *latpol,
+    thread_extended_policy_t tmsharepol,
+    thread_throughput_qos_policy_t thoughpol,
+    thread_latency_qos_t latpol,
     const char *name,
     caddr_t stk, size_t stksize,
     thread_func_t proc, void *arg, size_t len, /* proc_t *pp, */ int state,
@@ -118,9 +118,9 @@ extern kthread_t *spl_thread_create_named(const char *name,
     pri_t pri);
 
 extern kthread_t *spl_thread_create_named_with_extpol_and_qos(
-    thread_extended_policy_data_t *tmsharepol,
-    thread_throughput_qos_policy_data_t *thoughpol,
-    thread_latency_qos_policy_t *latpol,
+    thread_extended_policy_t tmsharepol,
+    thread_throughput_qos_policy_t thoughpol,
+    thread_latency_qos_policy_t latpol,
     const char *name,
     caddr_t stk, size_t stksize,
     thread_func_t proc,
