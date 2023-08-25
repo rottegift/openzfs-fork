@@ -1901,13 +1901,13 @@ spl_taskq_thread_create_named(const char *name,
 		};
 		new_thread =
 		    spl_thread_create_named_with_extpol_and_qos(
-			&timeshare, NULL, NULL,
-			name, stk, stksize, proc, arg, len, state, pri);
+		    &timeshare, NULL, NULL,
+		    name, stk, stksize, proc, arg, len, state, pri);
 	} else if (tq->tq_maxsize == 1 &&
 	    (tq->tq_flags & (TASKQ_DYNAMIC
-		| TASKQ_THREADS_CPU_PCT
-		| TASKQ_DUTY_CYCLE
-		| TASKQ_DC_BATCH)) == 0) {
+	    | TASKQ_THREADS_CPU_PCT
+	    | TASKQ_DUTY_CYCLE
+	    | TASKQ_DC_BATCH)) == 0) {
 		/*
 		 * This is a strict-FIFO taskq, which should be held at a
 		 * stable priority so that the immediately previous job on
@@ -1921,8 +1921,8 @@ spl_taskq_thread_create_named(const char *name,
 		};
 		new_thread =
 		    spl_thread_create_named_with_extpol_and_qos(
-			&timeshare, NULL, NULL,
-			name, stk, stksize, proc, arg, len, state, pri);
+		    &timeshare, NULL, NULL,
+		    name, stk, stksize, proc, arg, len, state, pri);
 	} else if (tq->tq_flags & TASKQ_DC_BATCH) {
 		/*
 		 * Batch SDC scheduling class,
@@ -1953,8 +1953,8 @@ spl_taskq_thread_create_named(const char *name,
 
 		new_thread =
 		    spl_thread_create_named_with_extpol_and_qos(
-			&timeshare, &throughpol, &latpol,
-			name, stk, stksize, proc, arg, len, state, pri_pct);
+		    &timeshare, &throughpol, &latpol,
+		    name, stk, stksize, proc, arg, len, state, pri_pct);
 	} else if (tq->tq_flags & TASKQ_DUTY_CYCLE) {
 		/*
 		 * SDC scheduling class, the sysdc threads.
@@ -1989,14 +1989,14 @@ spl_taskq_thread_create_named(const char *name,
 		/* no latency, default timeshare */
 		new_thread =
 		    spl_thread_create_named_with_extpol_and_qos(
-			NULL, &throughpol, NULL,
-			name, stk, stksize, proc, arg, len, state, pri_pct);
+		    NULL, &throughpol, NULL,
+		    name, stk, stksize, proc, arg, len, state, pri_pct);
 	} else if (pri < maxclsyspri) {
 		/* just a default thread */
 		new_thread =
 		    spl_thread_create_named_with_extpol_and_qos(
-			NULL, NULL, NULL,
-			name, stk, stksize, proc, arg, len, state, pri);
+		    NULL, NULL, NULL,
+		    name, stk, stksize, proc, arg, len, state, pri);
 	} else {
 		/*
 		 * maxclsyspri, low latency ("LEGACY" aka "USER_INITIATED")
@@ -2009,9 +2009,9 @@ spl_taskq_thread_create_named(const char *name,
 
 		new_thread =
 		    spl_thread_create_named_with_extpol_and_qos(
-			NULL, NULL, &latpol,
-			name, stk, stksize, proc, arg, len, state, pri);		}
-
+		    NULL, NULL, &latpol,
+		    name, stk, stksize, proc, arg, len, state, pri);
+	}
 	if (!new_thread) {
 		printf("SPL: %s:%s:%d: unable to create thread"
 		    " '%s', pri %d, DC %d, flags %x\n",

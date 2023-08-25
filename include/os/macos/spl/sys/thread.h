@@ -114,7 +114,8 @@ extern kthread_t *spl_thread_create_named_with_extpol_and_qos(
 extern kthread_t *spl_thread_create_named(const char *name,
     caddr_t stk, size_t stksize,
     thread_func_t proc, void *arg, size_t len,
-    /* proc_t *pp, */ int state,
+	/* proc_t *pp, */
+    int state,
     pri_t pri);
 
 extern kthread_t *spl_thread_create_named_with_extpol_and_qos(

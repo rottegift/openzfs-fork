@@ -552,7 +552,7 @@ spl_stop(kmod_info_t *ki, void *d)
 	spl_mutex_subsystem_fini();
 
 	lck_attr_free(spl_mtx_lck_attr);
-	spl_mtx_lck_attr= NULL;
+	spl_mtx_lck_attr = NULL;
 	lck_grp_attr_free(spl_mtx_grp_attr);
 	spl_mtx_grp_attr = NULL;
 	lck_grp_free(spl_mtx_grp);

@@ -188,18 +188,6 @@ spl_thread_create_named_with_extpol_and_qos(
 	    filename, line);
 #endif
 
-	/* * * *
-	 * * * *
-	 * Here we want to have some wrapper that takes as
-	 * an argument { .proc = proc, .arg = arg, rendezvous = mtx} and waits
-	 * until it is told to make forward progress, after we have
-	 * twiddled with the settings.
-	 *
-	 * Alternatively, have the wrapper for proc do the settings
-	 * twiddling
-	 */
-
-
 	uint64_t wait_location;
 
 	wrapper_mutex_t lck;
@@ -239,7 +227,7 @@ spl_thread_create_named_with_extpol_and_qos(
 		return (NULL);
 	}
 
-	for ( ; ; ) {
+	for (; ; ) {
 		spl_data_barrier();
 		(void) msleep(&wait_location, (lck_mtx_t *)&lck, PRIBIO,
 		    "spl thread initialization", 0);
@@ -376,11 +364,13 @@ spl_set_thread_throughput(thread_t thread,
 	if (!name)
 		name = "anonymous zfs thread (throughput)";
 
-        /*
-	 * TIERs: 0 is USER_INTERACTIVE, 1 is USER_INITIATED, 1 is LEGACY,
-	 *        2 is UTILITY, 5 is BACKGROUND, 5 is MAINTENANCE
+	/*
+	 * TIERs:
 	 *
-	 *  (from xnu/osfmk/kern/thread_policy.c)
+	 * 0 is USER_INTERACTIVE, 1 is USER_INITIATED, 1 is LEGACY,
+	 * 2 is UTILITY, 5 is BACKGROUND, 5 is MAINTENANCE
+	 *
+	 * (from xnu/osfmk/kern/thread_policy.c)
 	 */
 
 	kern_return_t qoskret = thread_policy_set(thread,
@@ -409,11 +399,12 @@ spl_set_thread_latency(thread_t thread,
 	if (!name)
 		name = "anonymous zfs thread (latency)";
 
-        /*
-	 * TIERs: 0 is USER_INTERACTIVE, 1 is USER_INITIATED, 1 is LEGACY,
-	 *        3 is UTILITY, 3 is BACKGROUND, 5 is MAINTENANCE
+	/*
+	 * TIERs:
+	 * 0 is USER_INTERACTIVE, 1 is USER_INITIATED, 1 is LEGACY,
+	 * 3 is UTILITY, 3 is BACKGROUND, 5 is MAINTENANCE
 	 *
-	 *  (from xnu/osfmk/kern/thread_policy.c)
+	 * (from xnu/osfmk/kern/thread_policy.c)
 	 *
 	 * NB: these differ from throughput tier mapping
 	 */
