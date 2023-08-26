@@ -23,7 +23,6 @@
  * Copyright (c) 2012, 2020 by Delphix. All rights reserved.
  * Copyright (c) 2014 Spectra Logic Corporation, All rights reserved.
  */
-
 #include <sys/zfs_context.h>
 #include <sys/dbuf.h>
 #include <sys/dnode.h>
@@ -201,8 +200,8 @@ dnode_dest(void *arg, void *unused)
 				    __FILE__, __func__, __LINE__,
 				    i);
 			}
-			extern void IOSleep(unsigned milliseconds);
-			IOSleep(1);
+			extern void IOSleepWithLeeway(unsigned, unsigned);
+			IOSleepWithLeeway(2, 1);
 		}
 	}
 	mutex_destroy(&dn->dn_mtx);
