@@ -29,7 +29,12 @@
  *
  */
 
+
 #include <IOKit/IOLib.h>
+#ifndef IOMallocType
+#define	IOMallocType(T) (T *)IOMallocAligned(sizeof (T), _Alignof(T))
+#define	IOFreeType(P, T) IOFreeAligned(P, sizeof (T))
+#endif
 #include <sys/debug.h>
 #include <sys/cdefs.h>
 #include <sys/cmn_err.h>
@@ -4253,9 +4258,11 @@ kmem_cache_build_slablist(kmem_cache_t *cp)
 
 	for (sp = list_head(&cp->cache_complete_slabs); sp != NULL;
 	    sp = list_next(&cp->cache_complete_slabs, sp)) {
-
-		MALLOC(fs, struct free_slab *, sizeof (struct free_slab),
-		    M_TEMP, M_WAITOK);
+#ifdef IOMallocType
+		fs = IOMallocType(struct free_slab);
+#else
+		error;
+#endif
 		fs->vmp = vmp;
 		fs->slabsize = cp->cache_slabsize;
 		fs->slab = (void *)P2ALIGN((uintptr_t)sp->slab_base,
@@ -4267,8 +4274,7 @@ kmem_cache_build_slablist(kmem_cache_t *cp)
 	for (sp = avl_first(&cp->cache_partial_slabs); sp != NULL;
 	    sp = AVL_NEXT(&cp->cache_partial_slabs, sp)) {
 
-		MALLOC(fs, struct free_slab *, sizeof (struct free_slab),
-		    M_TEMP, M_WAITOK);
+		fs = IOMallocType(struct free_slab);
 		fs->vmp = vmp;
 		fs->slabsize = cp->cache_slabsize;
 		fs->slab = (void *)P2ALIGN((uintptr_t)sp->slab_base,
@@ -4319,7 +4325,7 @@ kmem_cache_fini()
 		i++;
 		list_remove(&freelist, fs);
 		vmem_free_impl(fs->vmp, fs->slab, fs->slabsize);
-		FREE(fs, M_TEMP);
+		IOFreeType(fs, struct free_slab);
 
 	}
 	printf("SPL: Released %u slabs\n", i);

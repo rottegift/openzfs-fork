@@ -26,6 +26,11 @@
  *
  */
 
+#include <IOKit/IOLib.h>
+#ifndef IOMallocType
+#define	IOMallocType(T) (T *)IOMallocAligned(sizeof (T), _Alignof(T))
+#define	IOFreeType(P, T) IOFreeAligned(P, sizeof (T))
+#endif
 #include <sys/mutex.h>
 #include <sys/atomic.h>
 #include <mach/mach_types.h>
@@ -198,7 +203,7 @@ spl_mutex_subsystem_fini(void)
 				// Same place
 				found++;
 				list_remove(&mutex_list, runner);
-				FREE(runner, M_TEMP);
+				IOFreeType(runner, struct leak);
 				runner = NULL;
 			} // if same
 
@@ -211,7 +216,7 @@ spl_mutex_subsystem_fini(void)
 		    leak->location_line,
 		    found);
 
-		FREE(leak, M_TEMP);
+		IOFreeType(leak, struct leak);
 		total += found;
 
 	}
@@ -273,8 +278,7 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 
 	struct leak *leak;
 
-	MALLOC(leak, struct leak *,
-	    sizeof (struct leak),  M_TEMP, M_WAITOK);
+	leak = IOMallocType(struct leak);
 
 	if (leak) {
 		memset(leak, 0, sizeof (struct leak));
@@ -321,7 +325,7 @@ spl_mutex_destroy(kmutex_t *mp)
 		list_remove(&mutex_list, leak);
 		mp->leak = NULL;
 		mutex_exit(&mutex_list_mutex);
-		FREE(leak, M_TEMP);
+		IOFreeType(leak, struct leak);
 	}
 #endif
 }

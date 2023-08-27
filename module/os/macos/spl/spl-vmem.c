@@ -213,6 +213,10 @@
  */
 
 #include <IOKit/IOLib.h>
+#ifndef IOMallocType
+#define	IOMallocType(T) (T *)IOMallocAligned(sizeof (T), _Alignof(T))
+#define	IOFreeType(P, T) IOFreeAligned(P, sizeof (T))
+#endif
 #include <sys/vmem_impl.h>
 #include <sys/kmem.h>
 #include <sys/kstat.h>
@@ -458,8 +462,6 @@ extern uint64_t spl_dynamic_memory_cap_hit_floor;
 
 #define	INITIAL_BLOCK_SIZE	16ULL*1024ULL*1024ULL
 static char *initial_default_block = NULL;
-void *IOMallocAligned(vm_size_t size, vm_offset_t alignment);
-void IOFreeAligned(void * address, vm_size_t size);
 
 /*
  * Get a vmem_seg_t from the global segfree list.
@@ -3723,8 +3725,7 @@ static void vmem_fini_freelist(void *vmp, void *start, size_t size)
 {
 	struct free_slab *fs;
 
-	MALLOC(fs, struct free_slab *, sizeof (struct free_slab), M_TEMP,
-	    M_WAITOK);
+	fs = IOMallocType(struct free_slab);
 	fs->vmp = vmp;
 	fs->slabsize = size;
 	fs->slab = start;
@@ -3759,7 +3760,7 @@ vmem_free_span_list(void)
 		 * release = 1;
 		 *
 		 */
-		FREE(fs, M_TEMP);
+		IOFreeType(fs, struct free_slab);
 	}
 }
 
@@ -3969,7 +3970,7 @@ vmem_fini(vmem_t *heap)
 		list_remove(&freelist, fs);
 		// extern void segkmem_free(vmem_t *, void *, size_t);
 		// segkmem_free(fs->vmp, fs->slab, fs->slabsize);
-		FREE(fs, M_TEMP);
+		IOFreeType(fs, struct free_slab);
 	}
 	printf("SPL: WOULD HAVE released %llu bytes (%llu spans) from arenas\n",
 	    total, total_count);

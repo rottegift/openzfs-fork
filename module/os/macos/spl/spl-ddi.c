@@ -19,6 +19,7 @@
  * CDDL HEADER END
  */
 
+#include <IOKit/IOLib.h>
 #include <sys/types.h>
 #include <sys/kmem.h>
 #include <sys/sunddi.h>
@@ -327,7 +328,7 @@ ddi_create_minor_node(dev_info_t *dip, char *name, int spec_type,
 	 * We then change "/" to "_" and create more Apple-like /dev names
 	 *
 	 */
-	MALLOC(dup, char *, strlen(name)+1, M_TEMP, M_WAITOK);
+	dup = IOMallocAligned(strlen(name)+1, _Alignof(char));
 	if (dup == NULL)
 		return (ENOMEM);
 	memcpy(dup, name, strlen(name));
@@ -349,7 +350,7 @@ ddi_create_minor_node(dev_info_t *dip, char *name, int spec_type,
 		dip->devb = devfs_make_node(dev, DEVFS_BLOCK,
 		    UID_ROOT, GID_OPERATOR,
 		    0600, "disk_%s", dup);
-	FREE(dup, M_TEMP);
+	IOFreeAligned(dup, _Alignof(char));
 
 	return (error);
 }
