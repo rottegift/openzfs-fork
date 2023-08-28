@@ -171,9 +171,22 @@ spl_mutex_subsystem_fini(void)
 {
 #ifdef SPL_DEBUG_MUTEX
 	uint64_t total = 0;
-	printf("Dumping leaked mutex allocations...\n");
+	printf("SPL: %s:%d: Dumping leaked mutex allocations..."
+	    " zfs_active_mutex == %llu\n",
+	    __func__, __LINE__, atomic_load_64(&zfs_active_mutex));
 
+	/* Ask the thread to quit */
 	mutex_enter(&mutex_list_mutex);
+	wdlist_exit = 1;
+	while (wdlist_exit) {
+		cv_signal(&mutex_list_cv);
+		cv_wait(&mutex_list_cv, &mutex_list_mutex);
+	}
+
+	/* mutex watchdog thread has quit, we hold the mutex */
+
+	/* walk the leak list */
+
 	while (1) {
 		struct leak *leak, *runner;
 		uint32_t found;
@@ -218,22 +231,23 @@ spl_mutex_subsystem_fini(void)
 
 	}
 	mutex_exit(&mutex_list_mutex);
-	printf("Dumped %llu leaked allocations. Wait for watchdog "
-	    "to exit..\n", total);
 
-	/* Asking for it to quit */
-	mutex_enter(&mutex_list_mutex);
-	wdlist_exit = 1;
-	while (wdlist_exit) {
-		cv_signal(&mutex_list_cv);
-		cv_wait(&mutex_list_cv, &mutex_list_mutex);
-	}
-	mutex_exit(&mutex_list_mutex);
+	printf("SPL: %s:%d Dumped %llu leaked allocations.\n"
+	    "to exit..\n", __func__, __LINE__, total);
+
 	/* We can not call mutex_destroy() as it uses leak */
 	lck_mtx_destroy((lck_mtx_t *)&mutex_list_mutex.m_lock, zfs_mutex_group);
 	cv_destroy(&mutex_list_cv);
 	list_destroy(&mutex_list);
 #endif
+
+	if (atomic_load_64(&zfs_active_mutex) != 0) {
+		printf("SPL: %s:%d: zfs_active_mutex is %llu\n",
+		    __func__, __LINE__, atomic_load_64(&zfs_active_mutex));
+	} else {
+		printf("SPL: %s: good, zero zfs_active_mutex\n",
+		    __func__);
+	}
 
 	lck_attr_free(zfs_lock_attr);
 	zfs_lock_attr = NULL;
