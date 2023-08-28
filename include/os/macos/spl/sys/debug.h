@@ -80,6 +80,9 @@ int spl_panic(const char *file, const char *func, int line,
 int spl_assertf(const char *file, const char *func, int line,
     const char *fmt, ...);
 void spl_dumpstack(void);
+#ifndef panic
+extern void panic(const char *string, ...) __printflike(1,2);
+#endif
 
 void spl_backtrace(char *thesignal);
 int getpcstack(uintptr_t *pcstack, int pcstack_limit);
