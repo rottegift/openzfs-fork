@@ -219,7 +219,8 @@ spl_mutex_subsystem_fini(void)
 
 		} // for all nodes
 
-		printf("  mutex %p : %s %s %llu : # leaks: %u\n",
+		printf("SPL: %s:%d  mutex %p : %s %s %llu : # leaks: %u\n",
+		    __func__, __LINE__,
 		    leak->mp,
 		    leak->location_file,
 		    leak->location_function,
@@ -232,8 +233,8 @@ spl_mutex_subsystem_fini(void)
 	}
 	mutex_exit(&mutex_list_mutex);
 
-	printf("SPL: %s:%d Dumped %llu leaked allocations.\n"
-	    "to exit..\n", __func__, __LINE__, total);
+	printf("SPL: %s:%d Dumped %llu leaked allocations.\n",
+	    __func__, __LINE__, total);
 
 	/* We can not call mutex_destroy() as it uses leak */
 	lck_mtx_destroy((lck_mtx_t *)&mutex_list_mutex.m_lock, zfs_mutex_group);

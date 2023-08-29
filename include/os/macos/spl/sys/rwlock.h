@@ -44,7 +44,7 @@ typedef enum {
 
 struct krwlock {
 	uint32_t	rw_lock[4];	/* opaque lck_rw_t data */
-	void		*rw_owner;	/* writer (exclusive) lock only */
+	kthread_t	*rw_owner;	/* writer (exclusive) lock only */
 	int		rw_readers;	/* reader lock only */
 	int		rw_pad;		/* */
 #ifdef SPL_DEBUG_RWLOCK
