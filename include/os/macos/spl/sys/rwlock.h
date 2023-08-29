@@ -26,6 +26,10 @@
 #ifndef _SPL_RWLOCK_H
 #define	_SPL_RWLOCK_H
 
+#ifdef DEBUG
+#define	SPL_DEBUG_RWLOCK
+#endif
+
 #include <sys/types.h>
 #include <kern/locks.h>
 

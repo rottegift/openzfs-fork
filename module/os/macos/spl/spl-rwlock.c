@@ -393,7 +393,7 @@ spl_rwlock_fini(void)
 		} // for all nodes
 
 		printf("SPL: %s:%d  rwlock %p : %s %s %llu : # leaks: %u\n",
-		    __func__, __LINE,
+		    __func__, __LINE__,
 		    leak->mp,
 		    leak->location_file,
 		    leak->location_function,
