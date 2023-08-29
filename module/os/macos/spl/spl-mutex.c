@@ -272,14 +272,14 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 #endif
 {
 	ASSERT(type != MUTEX_SPIN);
-	ASSERT(ibc == NULL);
+	ASSERT3P(ibc, ==, NULL);
 
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, !=, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), !=, MUTEX_INIT);
 #endif
 
 	lck_mtx_init((lck_mtx_t *)&mp->m_lock, zfs_mutex_group, zfs_lock_attr);
-    mp->m_owner = NULL;
+	mp->m_owner = NULL;
 	mp->m_waiters = 0;
 	mp->m_sleepers = 0;
 
@@ -318,10 +318,10 @@ spl_mutex_destroy(kmutex_t *mp)
 		return;
 
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, ==, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
 #endif
 
-	if (mp->m_owner != 0)
+	if (atomic_load_nonatomic(&mp->m_owner) != 0)
 		panic("SPL: releasing held mutex");
 
 	lck_mtx_destroy((lck_mtx_t *)&mp->m_lock, zfs_mutex_group);
@@ -353,11 +353,8 @@ spl_mutex_enter(kmutex_t *mp)
 #endif
 {
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, ==, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
 #endif
-
-    if (mp->m_owner == current_thread())
-		panic("mutex_enter: locking against myself!");
 
 #ifdef DEBUG
 	if (*((uint64_t *)mp) == 0xdeadbeefdeadbeef) {
@@ -365,12 +362,15 @@ spl_mutex_enter(kmutex_t *mp)
 	}
 #endif
 
+	if (atomic_load_nonatomic(&mp->m_owner) == current_thread())
+		panic("mutex_enter: locking against myself!");
+
 	atomic_inc_64(&mp->m_waiters);
 	spl_data_barrier();
 	lck_mtx_lock((lck_mtx_t *)&mp->m_lock);
 	spl_data_barrier();
 	atomic_dec_64(&mp->m_waiters);
-	mp->m_owner = current_thread();
+	atomic_store_nonatomic(&mp->m_owner, current_thread());
 
 #ifdef SPL_DEBUG_MUTEX
 	if (mp->leak) {
@@ -393,7 +393,7 @@ spl_mutex_exit(kmutex_t *mp)
 #endif
 
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, ==, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
 #endif
 
 #ifdef SPL_DEBUG_MUTEX
@@ -423,7 +423,7 @@ spl_mutex_tryenter(kmutex_t *mp)
 	int held;
 
 #ifdef SPL_DEBUG_MUTEX
-	VERIFY3U(mp->m_initialised, ==, MUTEX_INIT);
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
 #endif
 
 	atomic_inc_64(&mp->m_waiters);
@@ -462,7 +462,7 @@ spl_mutex_tryenter(kmutex_t *mp)
 		spl_data_barrier();
 	atomic_dec_64(&mp->m_waiters);
 	if (held) {
-		mp->m_owner = current_thread();
+		atomic_store_nonatomic(&mp->m_owner, current_thread());
 
 #ifdef SPL_DEBUG_MUTEX
 	if (mp->leak) {
@@ -481,13 +481,13 @@ spl_mutex_tryenter(kmutex_t *mp)
 int
 spl_mutex_owned(kmutex_t *mp)
 {
-	return (mp->m_owner == current_thread());
+	return (atomic_load_nonatomic(&mp->m_owner) == current_thread());
 }
 
 struct kthread *
 spl_mutex_owner(kmutex_t *mp)
 {
-	return (mp->m_owner);
+	return (atomic_load_nonatomic(&mp->m_owner));
 }
 
 #ifdef SPL_DEBUG_MUTEX
