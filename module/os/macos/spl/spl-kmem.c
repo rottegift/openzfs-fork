@@ -4319,9 +4319,14 @@ kmem_cache_fini()
 		IOFreeType(fs, struct free_slab);
 
 	}
+
+	vmem_t *my_arena = cp->cache_arena;
+	char *my_arena_name = (my_arena == NULL)
+	    ? "NULL: destroyed arena"
+	    : my_arena->vm_name;
+
 	printf("SPL: %s:%d: Released %u slabs from '%s', arena '%s'\n",
-	    __func__, __LINE__, i, cp->cache_name,
-	    cp->cache_arena->vm_name);
+	    __func__, __LINE__, i, cp->cache_name, my_arena_name);
 
 	list_destroy(&freelist);
 }
