@@ -4319,7 +4319,10 @@ kmem_cache_fini()
 		IOFreeType(fs, struct free_slab);
 
 	}
-	printf("SPL: Released %u slabs\n", i);
+	printf("SPL: %s:%d: Released %u slabs from '%s', arena '%s'\n",
+	    __func__, __LINE__, i, cp->cache_name,
+	    cp->cache_arena->vm_name);
+
 	list_destroy(&freelist);
 }
 
