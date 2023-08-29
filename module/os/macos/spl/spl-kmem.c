@@ -4232,7 +4232,15 @@ kmem_cache_init(int pass, int use_large_pages)
 	kmem_big_alloc_table_max = maxbuf >> KMEM_BIG_SHIFT;
 }
 
+/*
+ * At kext unload, kmem_cache_build_slablist() builds a list of free slabs
+ * from all kmem caches, so kmem_cache_fini() can report the leaks and the
+ * total number of leaks.
+ */
+
 struct free_slab {
+	char	vm_name[VMEM_NAMELEN];
+	char	cache_name[KMEM_CACHE_NAMELEN + 1];
 	vmem_t *vmp;
 	size_t slabsize;
 	void *slab;
@@ -4240,7 +4248,6 @@ struct free_slab {
 };
 
 static list_t freelist;
-
 
 void
 kmem_cache_build_slablist(kmem_cache_t *cp)
@@ -4254,6 +4261,10 @@ kmem_cache_build_slablist(kmem_cache_t *cp)
 	for (sp = list_head(&cp->cache_complete_slabs); sp != NULL;
 	    sp = list_next(&cp->cache_complete_slabs, sp)) {
 		fs = IOMallocType(struct free_slab);
+		memset(fs, '\0', sizeof (struct free_slab));
+		strncpy(fs->vm_name, vmp->vm_name, VMEM_NAMELEN);
+		strncpy(fs->cache_name, cp->cache_name,
+		    KMEM_CACHE_NAMELEN);
 		fs->vmp = vmp;
 		fs->slabsize = cp->cache_slabsize;
 		fs->slab = (void *)P2ALIGN((uintptr_t)sp->slab_base,
@@ -4266,6 +4277,10 @@ kmem_cache_build_slablist(kmem_cache_t *cp)
 	    sp = AVL_NEXT(&cp->cache_partial_slabs, sp)) {
 
 		fs = IOMallocType(struct free_slab);
+		memset(fs, '\0', sizeof (struct free_slab));
+		strncpy(fs->vm_name, vmp->vm_name, VMEM_NAMELEN);
+		strncpy(fs->cache_name, cp->cache_name,
+		    KMEM_CACHE_NAMELEN);
 		fs->vmp = vmp;
 		fs->slabsize = cp->cache_slabsize;
 		fs->slab = (void *)P2ALIGN((uintptr_t)sp->slab_base,
@@ -4314,19 +4329,19 @@ kmem_cache_fini()
 	i = 0;
 	while ((fs = list_head(&freelist))) {
 		i++;
+		printf("SPL: %s:%d: released %lu from '%s' to '%s'\n",
+		    __func__, __LINE__,
+		    fs->slabsize,
+		    fs->cache_name,
+		    fs->vm_name);
 		list_remove(&freelist, fs);
 		vmem_free_impl(fs->vmp, fs->slab, fs->slabsize);
 		IOFreeType(fs, struct free_slab);
 
 	}
 
-	vmem_t *my_arena = cp->cache_arena;
-	char *my_arena_name = (my_arena == NULL)
-	    ? "NULL: destroyed arena"
-	    : my_arena->vm_name;
-
-	printf("SPL: %s:%d: Released %u slabs from '%s', arena '%s'\n",
-	    __func__, __LINE__, i, cp->cache_name, my_arena_name);
+	printf("SPL: %s:%d: Released %u slabs TOTAL\n",
+	    __func__, __LINE__, i);
 
 	list_destroy(&freelist);
 }
