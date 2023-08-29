@@ -49,7 +49,7 @@ uint64_t zfs_active_rwlock = 0;
 #ifdef SPL_DEBUG_RWLOCK
 #include <sys/list.h>
 static list_t rwlock_list;
-static kmutex_t rwlock_list_mutex;
+static wrapper_mutex_t rwlock_list_mutex;
 struct leak {
 	list_node_t	rwlock_leak_node;
 
@@ -86,6 +86,22 @@ rw_isinit(krwlock_t *rwlp)
 
 
 #ifdef SPL_DEBUG_RWLOCK
+
+static void
+rwlist_mutex_enter(wrapper_mutex_t *mtxp)
+{
+	spl_data_barrier();
+	lck_mtx_lock((lck_mtx_t *)mtxp);
+	spl_data_barrier();
+}
+
+static void
+rwlist_mutex_exit(wrapper_mutex_t *mtxp)
+{
+	spl_data_barrier();
+	lck_mtx_unlock((lck_mtx_t *)mtxp);
+}
+
 void
 rw_initx(krwlock_t *rwlp, char *name, krw_type_t type, __unused void *arg,
     const char *file, const char *fn, int line)
@@ -121,11 +137,11 @@ rw_init(krwlock_t *rwlp, char *name, krw_type_t type, __unused void *arg)
 		leak->location_line = line;
 		leak->mp = rwlp;
 
-		mutex_enter(&rwlock_list_mutex);
+		rwlist_mutex_enter(&rwlock_list_mutex);
 		list_link_init(&leak->rwlock_leak_node);
 		list_insert_tail(&rwlock_list, leak);
 		rwlp->leak = leak;
-		mutex_exit(&rwlock_list_mutex);
+		rwlist_mutex_exit(&rwlock_list_mutex);
 	}
 	leak->wdlist_locktime = 0;
 	leak->wdlist_file[0] = 0;
@@ -151,10 +167,10 @@ rw_destroy(krwlock_t *rwlp)
 #ifdef SPL_DEBUG_RWLOCK
 	if (rwlp->leak) {
 		struct leak *leak = (struct leak *)rwlp->leak;
-		mutex_enter(&rwlock_list_mutex);
+		rwlist_mutex_enter(&rwlock_list_mutex);
 		list_remove(&rwlock_list, leak);
 		rwlp->leak = NULL;
-		mutex_exit(&rwlock_list_mutex);
+		rwlist_mutex_exit(&rwlock_list_mutex);
 		IOFreeType(leak, struct leak);
 	}
 #endif
@@ -342,7 +358,7 @@ spl_rwlock_init(void)
 #ifdef SPL_DEBUG_RWLOCK
 	list_create(&rwlock_list, sizeof (struct leak),
 	    offsetof(struct leak, rwlock_leak_node));
-	lck_mtx_init((lck_mtx_t *)&rwlock_list_mutex.m_lock,
+	lck_mtx_init((lck_mtx_t *)&rwlock_list_mutex,
 	    zfs_rwlock_group, zfs_rwlock_attr);
 #endif
 
@@ -359,7 +375,7 @@ spl_rwlock_fini(void)
 	    " zfs_active_rwlock == %llu\n",
 	    __func__, __LINE__, atomic_load_64(&zfs_active_rwlock));
 
-	mutex_enter(&rwlock_list_mutex);
+	rwlist_mutex_enter(&rwlock_list_mutex);
 	while (1) {
 		struct leak *leak, *runner;
 		uint32_t found;
@@ -404,11 +420,11 @@ spl_rwlock_fini(void)
 		total += found;
 
 	}
-	mutex_exit(&rwlock_list_mutex);
+	rwlist_mutex_exit(&rwlock_list_mutex);
 	printf("SPL: %s:%d: Dumped %llu leaked allocations.\n",
 	    __func__, __LINE__, total);
 
-	lck_mtx_destroy((lck_mtx_t *)&rwlock_list_mutex.m_lock,
+	lck_mtx_destroy((lck_mtx_t *)&rwlock_list_mutex,
 	    zfs_rwlock_group);
 	list_destroy(&rwlock_list);
 #endif
