@@ -39,6 +39,7 @@
 #include <sys/seg_kmem.h>
 #include <sys/systm.h>
 #include <sys/sysctl.h>
+#include <sys/mutex.h>
 #include <sys/thread.h>
 #include <sys/taskq.h>
 #include <sys/kmem_impl.h>
