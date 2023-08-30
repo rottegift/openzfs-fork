@@ -109,7 +109,7 @@ spl_wdlist_check(void *ignored)
 		    "mutex watchdog napping",
 		    &ts);
 
-		ASSERT0(msleep_result);
+		ASSERT3S(msleep_result, ==, EAGAIN);
 
 		spl_data_barrier();
 
@@ -365,27 +365,26 @@ spl_mutex_destroy(kmutex_t *mp)
 	VERIFY3P(leak, !=, NULL);
 
 #define	BUSY_LOCK_THRESHOLD			1000 * 1000
-#define	BUSY_LOCK_PER_MILLISECOND_THRESHOLD	2
+#define	BUSY_LOCK_PER_MILLISECOND_THRESHOLD	10
 
 	if (leak->wdlist_total_lock_count > BUSY_LOCK_THRESHOLD) {
 		const hrtime_t nsage =
 		    gethrtime() - leak->wdlist_mutex_created_time;
 		const uint64_t msage = NSEC2MSEC(nsage) + 1;
+		const uint64_t ratio = leak->wdlist_total_lock_count / msage;
 
-		if (leak->wdlist_total_lock_count / msage >
-		    BUSY_LOCK_PER_MILLISECOND_THRESHOLD) {
-			const uint64_t secage = NSEC2MSEC(nsage);
+		if (ratio > BUSY_LOCK_PER_MILLISECOND_THRESHOLD) {
+			const uint64_t secage = NSEC2SEC(nsage);
 
-			printf("SPL: %s:%d: destroyed hot lock"
+			printf("SPL: %s:%d: destroyed hot lock (%llu/ms)"
 			    " %llu mutex_enters since creation at %s:%s:%d"
-			    " %llu seconds ago last lock at %s:%s:%d\n",
+			    " %llu seconds ago\n",
 			    __func__, __LINE__,
+			    ratio,
 			    leak->wdlist_total_lock_count,
 			    leak->creation_file, leak->creation_function,
 			    leak->creation_line,
-			    secage,
-			    leak->location_file, leak->location_function,
-			    leak->location_line);
+			    secage);
 		}
 	}
 
@@ -397,18 +396,15 @@ spl_mutex_destroy(kmutex_t *mp)
 	    leak->wdlist_total_trylock_miss;
 
 	if (try_calls > TRYLOCK_CALL_THRESHOLD) {
-		const uint64_t denom =
-		    MAX(leak->wdlist_total_trylock_miss, 1);
-
-		const uint64_t ratio = try_calls / denom;
+		const uint64_t ratio = leak->wdlist_total_trylock_miss /
+		    try_calls;
 
 		if (ratio > TRYLOCK_WAIT_RATIO) {
 			printf("SPL: %s:%d: destroyed lock which"
-			    " waited often in mutex_trylock,"
-			    " %llu all locks"
-			    " %llu trysuccess %llu miss, ratio %llu"
-			    " created %llu seconds ago at %s:%s:%d"
-			    " last lock at %s:%s:%d\n",
+			    " waited often in mutex_trylock:"
+			    " %llu all locks,"
+			    " %llu trysuccess, %llu miss,  not:held %llu,"
+			    " created %llu seconds ago at %s:%s:%d\n",
 			    __func__, __LINE__,
 			    leak->wdlist_total_lock_count,
 			    leak->wdlist_total_trylock_success,
@@ -417,9 +413,7 @@ spl_mutex_destroy(kmutex_t *mp)
 			    NSEC2SEC(gethrtime() -
 			    leak->wdlist_mutex_created_time),
 			    leak->creation_file, leak->creation_function,
-			    leak->creation_line,
-			    leak->location_file, leak->location_function,
-			    leak->location_line);
+			    leak->creation_line);
 		}
 	}
 
