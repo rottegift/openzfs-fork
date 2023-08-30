@@ -415,7 +415,7 @@ spl_mutex_destroy(kmutex_t *mp)
 			    leak->wdlist_total_trylock_miss,
 			    ratio,
 			    NSEC2SEC(gethrtime() -
-				leak->wdlist_mutex_created_time),
+			    leak->wdlist_mutex_created_time),
 			    leak->creation_file, leak->creation_function,
 			    leak->creation_line,
 			    leak->location_file, leak->location_function,
@@ -470,7 +470,7 @@ spl_mutex_enter(kmutex_t *mp)
 		strlcpy(leak->location_file,
 		    file, sizeof (leak->location_file));
 		strlcpy(leak->location_function,
-		    func, sizeof(leak->location_function));
+		    func, sizeof (leak->location_function));
 		leak->location_line = line;
 		leak->wdlist_total_lock_count++;
 	} else {
