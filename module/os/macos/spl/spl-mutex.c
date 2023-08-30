@@ -341,71 +341,69 @@ spl_mutex_destroy(kmutex_t *mp)
 #ifdef SPL_DEBUG_MUTEX
 	atomic_store_nonatomic(&mp->m_initialised, MUTEX_DESTROYED);
 
-	if (mp->leak) {
-		struct leak *leak = (struct leak *)mp->leak;
+	struct leak *leak = (struct leak *)mp->leak;
+
+	VERIFY3P(leak, !=, NULL);
 
 #define	BUSY_LOCK_THRESHOLD			1000 * 1000
 #define	BUSY_LOCK_PER_MILLISECOND_THRESHOLD	2
 
-		if (leak->wdlist_total_lock_count > BUSY_LOCK_THRESHOLD) {
-			const hrtime_t nsage =
-			    gethrtime() - leak->wdlist_mutex_created;
-			const uint64_t msage = NSEC2MSEC(nsage) + 1;
+	if (leak->wdlist_total_lock_count > BUSY_LOCK_THRESHOLD) {
+		const hrtime_t nsage =
+		    gethrtime() - leak->wdlist_mutex_created;
+		const uint64_t msage = NSEC2MSEC(nsage) + 1;
 
-			if (leak->wdlist_total_lock_count / msage >
-			    BUSY_LOCK_PER_MILLISECOND_THRESHOLD) {
-				const uint64_t secage = NSEC2MSEC(nsage);
+		if (leak->wdlist_total_lock_count / msage >
+		    BUSY_LOCK_PER_MILLISECOND_THRESHOLD) {
+			const uint64_t secage = NSEC2MSEC(nsage);
 
-				printf("SPL: %s:%d: destroyed hot lock"
-				    " %llu mutex_enters since creation"
-				    " %llu seconds ago at %s:%d\n",
-				    __func__, __LINE__,
-				    leak->wdlist_total_lock_count,
-				    secage,
-				    leak->wdlist_file, leak->wdlist_line);
-			}
+			printf("SPL: %s:%d: destroyed hot lock"
+			    " %llu mutex_enters since creation"
+			    " %llu seconds ago last lock at %s:%d\n",
+			    __func__, __LINE__,
+			    leak->wdlist_total_lock_count,
+			    secage,
+			    leak->wdlist_file, leak->wdlist_line);
 		}
+	}
 
 #define	TRYLOCK_WAIT_RATIO	2
 #define	TRYLOCK_CALL_THRESHOLD	1000 * 1000
 
-		const uint64_t try_calls =
-		    leak->wdlist_total_trylock_success +
-		    leak->wdlist_total_trylock_miss;
+	const uint64_t try_calls =
+	    leak->wdlist_total_trylock_success +
+	    leak->wdlist_total_trylock_miss;
 
-		if (try_calls > TRYLOCK_CALL_THRESHOLD) {
-			const uint64_t denom =
-			    MAX(leak->wdlist_total_trylock_miss, 1);
+	if (try_calls > TRYLOCK_CALL_THRESHOLD) {
+		const uint64_t denom =
+		    MAX(leak->wdlist_total_trylock_miss, 1);
 
-			const uint64_t ratio = try_calls / denom;
+		const uint64_t ratio = try_calls / denom;
 
-			if (ratio > TRYLOCK_WAIT_RATIO) {
-				printf("SPL: %s:%d: destroyed lock which"
-				    " waited often in mutex_trylock,"
-				    " %llu all locks"
-				    " %llu trysuccess %llu miss, ratio %llu"
-				    " created %llu seconds ago at %s:%d\n",
-				    __func__, __LINE__,
-				    leak->wdlist_total_lock_count,
-				    leak->wdlist_total_trylock_success,
-				    leak->wdlist_total_trylock_miss,
-				    ratio,
-				    NSEC2SEC(gethrtime() -
-					leak->wdlist_mutex_created),
-				    leak->wdlist_file, leak->wdlist_line);
-			}
+		if (ratio > TRYLOCK_WAIT_RATIO) {
+			printf("SPL: %s:%d: destroyed lock which"
+			    " waited often in mutex_trylock,"
+			    " %llu all locks"
+			    " %llu trysuccess %llu miss, ratio %llu"
+			    " created %llu seconds ago last lock at %s:%d\n",
+			    __func__, __LINE__,
+			    leak->wdlist_total_lock_count,
+			    leak->wdlist_total_trylock_success,
+			    leak->wdlist_total_trylock_miss,
+			    ratio,
+			    NSEC2SEC(gethrtime() -
+				leak->wdlist_mutex_created),
+			    leak->wdlist_file, leak->wdlist_line);
 		}
-
-		mutex_enter(&mutex_list_mutex);
-		list_remove(&mutex_list, leak);
-		mp->leak = NULL;
-		mutex_exit(&mutex_list_mutex);
-		IOFreeType(leak, struct leak);
 	}
+
+	mutex_enter(&mutex_list_mutex);
+	list_remove(&mutex_list, leak);
+	mp->leak = NULL;
+	mutex_exit(&mutex_list_mutex);
+	IOFreeType(leak, struct leak);
 #endif
 }
-
-
 
 #ifdef SPL_DEBUG_MUTEX
 void
@@ -420,13 +418,16 @@ spl_mutex_enter(kmutex_t *mp)
 #endif
 
 #ifdef DEBUG
-	if (*((uint64_t *)mp) == 0xdeadbeefdeadbeef) {
-		panic("SPL: mutex_enter");
+	if (unlikely(*((uint64_t *)mp) == 0xdeadbeefdeadbeef)) {
+		panic("SPL: mutex_enter deadbeef");
+		__builtin_unreachable();
 	}
 #endif
 
-	if (atomic_load_nonatomic(&mp->m_owner) == current_thread())
+	if (atomic_load_nonatomic(&mp->m_owner) == current_thread()) {
 		panic("mutex_enter: locking against myself!");
+		__builtin_unreachable();
+	}
 
 	atomic_inc_64(&mp->m_waiters);
 	spl_data_barrier();
@@ -436,12 +437,16 @@ spl_mutex_enter(kmutex_t *mp)
 	atomic_store_nonatomic(&mp->m_owner, current_thread());
 
 #ifdef SPL_DEBUG_MUTEX
-	if (mp->leak) {
+	if (likely(mp->leak)) {
 		struct leak *leak = (struct leak *)mp->leak;
 		leak->wdlist_locktime = gethrestime_sec();
 		strlcpy(leak->wdlist_file, file, sizeof (leak->wdlist_file));
 		leak->wdlist_line = line;
 		leak->wdlist_total_lock_count++;
+	} else {
+		panic("SPL: %s:%d: where is my leak data?"
+		    " possible compilation mismatch", __func__, __LINE__);
+		__builtin_unreachable();
 	}
 #endif
 
@@ -451,8 +456,9 @@ void
 spl_mutex_exit(kmutex_t *mp)
 {
 #ifdef DEBUG
-	if (*((uint64_t *)mp) == 0xdeadbeefdeadbeef) {
-		panic("SPL: mutex_exit");
+	if (unlikely(*((uint64_t *)mp) == 0xdeadbeefdeadbeef)) {
+		panic("SPL: mutex_exit deadbeef");
+		__builtin_unreachable();
 	}
 #endif
 
@@ -461,7 +467,7 @@ spl_mutex_exit(kmutex_t *mp)
 #endif
 
 #ifdef SPL_DEBUG_MUTEX
-	if (mp->leak) {
+	if (likely(mp->leak)) {
 		struct leak *leak = (struct leak *)mp->leak;
 		uint64_t locktime = leak->wdlist_locktime;
 		uint64_t noe = gethrestime_sec();
@@ -474,6 +480,10 @@ spl_mutex_exit(kmutex_t *mp)
 		leak->wdlist_locktime = 0;
 		leak->wdlist_file[0] = 0;
 		leak->wdlist_line = 0;
+	} else {
+		panic("SPL: %s:%d: where is my leak data?",
+		    __func__, __LINE__);
+		__builtin_unreachable();
 	}
 #endif
 	mp->m_owner = NULL;
@@ -529,7 +539,7 @@ spl_mutex_tryenter(kmutex_t *mp)
 		atomic_store_nonatomic(&mp->m_owner, current_thread());
 
 #ifdef SPL_DEBUG_MUTEX
-	if (mp->leak) {
+	if (likely(mp->leak)) {
 		struct leak *leak = (struct leak *)mp->leak;
 		leak->wdlist_locktime = gethrestime_sec();
 		if (held) {
@@ -538,6 +548,10 @@ spl_mutex_tryenter(kmutex_t *mp)
 		} else {
 			atomic_inc_64(&leak->wdlist_total_trylock_miss);
 		}
+	} else {
+		panic("SPL: %s:%d: where is my leak data?",
+		    __func__, __LINE__);
+		__builtin_unreachable();
 	}
 #endif
 
