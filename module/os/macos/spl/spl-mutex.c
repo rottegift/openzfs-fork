@@ -388,28 +388,31 @@ spl_mutex_destroy(kmutex_t *mp)
 		}
 	}
 
-#define	TRYLOCK_WAIT_RATIO	2
 #define	TRYLOCK_CALL_THRESHOLD	1000 * 1000
+#define	TRYLOCK_WAIT_MIN_PCT	2		// mutex_trylock misses as %
+
 
 	const uint64_t try_calls =
 	    leak->wdlist_total_trylock_success +
 	    leak->wdlist_total_trylock_miss;
+	const uint64_t try_misses =
+	    leak->wdlist_total_trylock_miss;
 
-	if (try_calls > TRYLOCK_CALL_THRESHOLD) {
-		const uint64_t ratio = leak->wdlist_total_trylock_miss /
-		    try_calls;
+	if (try_misses > 0 && try_calls > TRYLOCK_CALL_THRESHOLD) {
+		const uint64_t notheldpct =
+		    (try_misses * 100) / try_calls;
 
-		if (ratio > TRYLOCK_WAIT_RATIO) {
+		if (notheldpct > TRYLOCK_WAIT_MIN_PCT) {
 			printf("SPL: %s:%d: destroyed lock which"
 			    " waited often in mutex_trylock:"
 			    " %llu all locks,"
-			    " %llu trysuccess, %llu miss,  not:held %llu,"
+			    " %llu trysuccess, %llu miss, notheldpct %llu,"
 			    " created %llu seconds ago at %s:%s:%d\n",
 			    __func__, __LINE__,
 			    leak->wdlist_total_lock_count,
 			    leak->wdlist_total_trylock_success,
 			    leak->wdlist_total_trylock_miss,
-			    ratio,
+			    notheldpct,
 			    NSEC2SEC(gethrtime() -
 			    leak->wdlist_mutex_created_time),
 			    leak->creation_file, leak->creation_function,
