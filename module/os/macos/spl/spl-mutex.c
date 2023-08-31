@@ -154,7 +154,7 @@ spl_wdlist_check(void *ignored)
 				    mp->creation_file, mp->creation_function,
 				    mp->creation_line, period_locks,
 				    noe - prev_noe);
-				if (period_lock_record_holder > period_locks)
+				if (period_locks > period_lock_record_holder)
 					period_lock_record_holder =
 					    period_locks;
 			}
