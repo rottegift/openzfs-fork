@@ -98,9 +98,12 @@ inline static void
 spl_wdlist_check(void *ignored)
 {
 	struct leak *mp;
+	uint64_t prev_noe = 0;
+
 	printf("SPL: Mutex watchdog is alive\n");
 
 	lck_mtx_lock((lck_mtx_t *)&mutex_list_mtx);
+
 	while (!wdlist_exit) {
 
 		struct timespec ts = { .tv_sec = SPL_MUTEX_WATCHDOG_SLEEP };
@@ -119,7 +122,6 @@ spl_wdlist_check(void *ignored)
 
 		spl_data_barrier();
 
-		static uint64_t prev_noe = 0;
 		uint64_t noe = gethrestime_sec();
 		for (mp = list_head(&mutex_list);
 		    mp;
@@ -151,7 +153,9 @@ spl_wdlist_check(void *ignored)
 				    mp->creation_file, mp->creation_function,
 				    mp->creation_line, period_locks,
 				    NSEC2SEC(noe - prev_noe));
-				period_lock_record_holder = period_locks;
+				if (period_lock_record_holder > period_locks)
+					period_lock_record_holder =
+					    period_locks;
 			}
 
 			if (period_trymiss > HIGH_TRYLOCK_MISS_PER_RUN &&
@@ -164,9 +168,13 @@ spl_wdlist_check(void *ignored)
 				    mp->creation_file, mp->creation_function,
 				    mp->creation_line, period_trymiss,
 				    NSEC2SEC(noe - prev_noe));
+				if (period_trymiss > period_miss_record_holder)
+					period_miss_record_holder =
+					    period_trymiss;
 			}
 
 		} // for all
+		ASSERT3U(prev_noe, <, noe);
 		prev_noe = noe;
 	} // while not exit
 
