@@ -148,12 +148,15 @@ spl_wdlist_check(void *ignored)
 			if (period_locks > HIGH_LOCKS_PER_RUN &&
 			    period_locks >
 			    (period_lock_record_holder * 100) / 90) {
-				printf("SPL: mutex (%p) [created %s:%s:%d]"
-				    " locked %u times in %llu seconds\n",
+				printf("SPL: hot lock mutex (%p)"
+				    " [created %s:%s:%d]"
+				    " locked %u times in %llu seconds,"
+				    " hottest was %u\n",
 				    mp,
 				    mp->creation_file, mp->creation_function,
 				    mp->creation_line, period_locks,
-				    noe - prev_noe);
+				    noe - prev_noe,
+				    period_lock_record_holder);
 				if (period_locks > period_lock_record_holder)
 					period_lock_record_holder =
 					    period_locks;
@@ -162,13 +165,15 @@ spl_wdlist_check(void *ignored)
 			if (period_trymiss > HIGH_TRYLOCK_MISS_PER_RUN &&
 			    period_trymiss > (period_miss_record_holder *
 			    90) / 100) {
-				printf("SPL: mutex (%p) [created %s:%s:%d]"
+				printf("SPL: hot miss mutex (%p)"
+				    " [created %s:%s:%d]"
 				    " had %u mutex_trylock misses in"
-				    " %llu seconds\n",
+				    " %llu seconds, hottest was %u\n",
 				    mp,
 				    mp->creation_file, mp->creation_function,
 				    mp->creation_line, period_trymiss,
-				    noe - prev_noe);
+				    noe - prev_noe,
+				    period_miss_record_holder);
 				if (period_trymiss > period_miss_record_holder)
 					period_miss_record_holder =
 					    period_trymiss;
