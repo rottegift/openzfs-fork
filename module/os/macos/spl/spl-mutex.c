@@ -106,6 +106,10 @@ spl_wdlist_check(void *ignored)
 		struct timespec ts = { .tv_sec = SPL_MUTEX_WATCHDOG_SLEEP };
 		int msleep_result;
 
+		/* only this thread can modify these */
+		static uint32_t period_lock_record_holder = 0;
+		static uint32_t period_miss_record_holder = 0;
+
 		msleep_result = msleep((caddr_t)&mutex_list_wait_loc,
 		    (lck_mtx_t *)&mutex_list_mtx, PRIBIO,
 		    "mutex watchdog napping",
@@ -130,7 +134,7 @@ spl_wdlist_check(void *ignored)
 				    mp->location_line);
 			} // if old
 
-#define	HIGH_LOCKS_PER_RUN		1000
+#define	HIGH_LOCKS_PER_RUN		10000
 #define	HIGH_TRYLOCK_MISS_PER_RUN	100
 
 			const uint32_t period_locks = atomic_swap_32(
@@ -138,16 +142,21 @@ spl_wdlist_check(void *ignored)
 			const uint32_t period_trymiss = atomic_swap_32(
 			    &mp->wdlist_period_trylock_miss, 0);
 
-			if (period_locks > HIGH_LOCKS_PER_RUN) {
+			if (period_locks > HIGH_LOCKS_PER_RUN &&
+			    period_locks >
+			    (period_lock_record_holder * 100) / 90) {
 				printf("SPL: mutex (%p) [created %s:%s:%d]"
 				    " locked %u times in %llu seconds\n",
 				    mp,
 				    mp->creation_file, mp->creation_function,
 				    mp->creation_line, period_locks,
 				    NSEC2SEC(noe - prev_noe));
+				period_lock_record_holder = period_locks;
 			}
 
-			if (period_trymiss > HIGH_TRYLOCK_MISS_PER_RUN) {
+			if (period_trymiss > HIGH_TRYLOCK_MISS_PER_RUN &&
+			    period_trymiss > (period_miss_record_holder *
+			    90) / 100) {
 				printf("SPL: mutex (%p) [created %s:%s:%d]"
 				    " had %u mutex_trylock misses in"
 				    " %llu seconds\n",
@@ -157,8 +166,8 @@ spl_wdlist_check(void *ignored)
 				    NSEC2SEC(noe - prev_noe));
 			}
 
-		prev_noe = noe;
 		} // for all
+		prev_noe = noe;
 	} // while not exit
 
 	wdlist_exit = 0;
@@ -397,27 +406,58 @@ spl_mutex_destroy(kmutex_t *mp)
 
 	VERIFY3P(leak, !=, NULL);
 
+	/* WAGs, but they rise dynamically on very fast&busy systems */
+
 #define	BUSY_LOCK_THRESHOLD			1000 * 1000
-#define	BUSY_LOCK_PER_MILLISECOND_THRESHOLD	10
+#define	BUSY_LOCK_PER_SECOND_THRESHOLD		1000
+
+	/*
+	 * Multiple mutex_destroy() can be in flight from different
+	 * threads, so these have to be protected.  Easiest to do
+	 * with an _Atomic declaration, since we're just doing
+	 * straightforward compares and new-value stores, and it does not
+	 * especially matter what order the mutex_destroy()s arrive in,
+	 * i.e., ACQUIRE/RELEASE/ACQ_REL memory order would be fine here,
+	 * and we are very likely to be happy with what an Apple Silicon
+	 * compiler chooses as default here.  See comment further below.
+	 */
+	static _Atomic uint64_t busy_lock_per_second_record_holder = 0;
 
 	if (leak->wdlist_total_lock_count > BUSY_LOCK_THRESHOLD) {
 		const hrtime_t nsage =
 		    gethrtime() - leak->wdlist_mutex_created_time;
-		const uint64_t msage = NSEC2MSEC(nsage) + 1;
-		const uint64_t ratio = leak->wdlist_total_lock_count / msage;
+		const uint64_t secage = NSEC2SEC(nsage) + 1;
+		const uint64_t meanlps = leak->wdlist_total_lock_count / secage;
+		const uint64_t hot_thresh =
+		    (busy_lock_per_second_record_holder * 100) / 90;
 
-		if (ratio > BUSY_LOCK_PER_MILLISECOND_THRESHOLD) {
-			const uint64_t secage = NSEC2SEC(nsage);
-
-			printf("SPL: %s:%d: destroyed hot lock (%llu/ms)"
+		if (meanlps > BUSY_LOCK_PER_SECOND_THRESHOLD &&
+		    meanlps > hot_thresh) {
+			printf("SPL: %s:%d: destroyed hot lock (mean lps %llu)"
 			    " %llu mutex_enters since creation at %s:%s:%d"
-			    " %llu seconds ago\n",
+			    " %llu seconds ago (hot was %llu lps)\n",
 			    __func__, __LINE__,
-			    ratio,
+			    meanlps,
 			    leak->wdlist_total_lock_count,
 			    leak->creation_file, leak->creation_function,
 			    leak->creation_line,
-			    secage);
+			    secage,
+			    busy_lock_per_second_record_holder);
+			/*
+			 * We permit a small race here to avoid a mutex
+			 * locking out any concurrent mutex_destroy(); it is
+			 * possible that another thread is right here (for a
+			 * different mutex than this one) with its meanlps
+			 * higher than THIS meanlps, in which case the record
+			 * may end up being either one.  We get some relief on
+			 * this from spl_data_barrier()s ordering the xnu
+			 * locking/unlocking, and being wrong is far from fatal,
+			 * since it only controls when we do the printf above.
+			 * This is likely to be a real-world race, but not
+			 * worth coding an atomic-compare-exchange loop.
+			 */
+			if (meanlps > busy_lock_per_second_record_holder)
+				busy_lock_per_second_record_holder = meanlps;
 		}
 	}
 
