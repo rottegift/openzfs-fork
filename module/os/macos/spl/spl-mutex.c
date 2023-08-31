@@ -80,6 +80,8 @@ struct leak {
 	uint64_t	wdlist_total_lock_count;
 	uint64_t	wdlist_total_trylock_success;
 	uint64_t	wdlist_total_trylock_miss;
+	uint32_t	wdlist_period_lock_count;
+	uint32_t	wdlist_period_trylock_miss;
 };
 
 static int wdlist_exit = 0;
@@ -113,6 +115,7 @@ spl_wdlist_check(void *ignored)
 
 		spl_data_barrier();
 
+		static uint64_t prev_noe = 0;
 		uint64_t noe = gethrestime_sec();
 		for (mp = list_head(&mutex_list);
 		    mp;
@@ -121,10 +124,40 @@ spl_wdlist_check(void *ignored)
 			if ((locktime > 0) && (noe > locktime) &&
 			    noe - locktime >= SPL_MUTEX_WATCHDOG_TIMEOUT) {
 				printf("SPL: mutex (%p) held for %llus by "
-				    "'%s':%d\n", mp, noe -
+				    "'%s':%s:%d\n", mp, noe -
 				    mp->wdlist_locktime, mp->location_file,
+				    mp->location_function,
 				    mp->location_line);
 			} // if old
+
+#define	HIGH_LOCKS_PER_RUN		1000
+#define	HIGH_TRYLOCK_MISS_PER_RUN	100
+
+			const uint32_t period_locks = atomic_swap_32(
+			    &mp->wdlist_period_lock_count, 0);
+			const uint32_t period_trymiss = atomic_swap_32(
+			    &mp->wdlist_period_trylock_miss, 0);
+
+			if (period_locks > HIGH_LOCKS_PER_RUN) {
+				printf("SPL: mutex (%p) [created %s:%s:%d]"
+				    " locked %u times in %llu seconds\n",
+				    mp,
+				    mp->creation_file, mp->creation_function,
+				    mp->creation_line, period_locks,
+				    NSEC2SEC(noe - prev_noe));
+			}
+
+			if (period_trymiss > HIGH_TRYLOCK_MISS_PER_RUN) {
+				printf("SPL: mutex (%p) [created %s:%s:%d]"
+				    " had %u mutex_trylock misses in"
+				    " %llu seconds\n",
+				    mp,
+				    mp->creation_file, mp->creation_function,
+				    mp->creation_line, period_trymiss,
+				    NSEC2SEC(noe - prev_noe));
+			}
+
+		prev_noe = noe;
 		} // for all
 	} // while not exit
 
@@ -462,6 +495,12 @@ spl_mutex_enter(kmutex_t *mp)
 
 #ifdef SPL_DEBUG_MUTEX
 	if (likely(mp->leak)) {
+		/*
+		 * We have the lock here, so our leak structure will not be
+		 * interfered with by other mutex_* functions operating on
+		 * this lock, except for the periodic spl_wdlist_check()
+		 * thread (see below) or a mutex_tryenter() (which will fail)
+		 */
 		struct leak *leak = (struct leak *)mp->leak;
 		leak->wdlist_locktime = gethrestime_sec();
 		strlcpy(leak->location_file,
@@ -470,6 +509,30 @@ spl_mutex_enter(kmutex_t *mp)
 		    func, sizeof (leak->location_function));
 		leak->location_line = line;
 		leak->wdlist_total_lock_count++;
+		/*
+		 * We allow a possible inaccuracy here by not
+		 * doing an atomic_inc_32() for the period lock.
+		 * The race can only be between this current thread
+		 * right here, and the spl_wdlist_check() periodic
+		 * read-modify-write.
+		 *
+		 * That RMW is done by an atomic_swap_32()
+		 * which uses SEQ_CST on Mac platforms,
+		 * which should order that read&zero against this
+		 * increment. In particular, the increment here shouldn't
+		 * be here_read_large_old_value_from_memory__to_register,
+		 * here_increment_register,
+		 * periodic_thread_sets_old_value_to_zero,
+		 * here_write_large_value_from_register_to_memory,
+		 * but it is technically possible (the race window is
+		 * very narrow!).
+		 *
+		 * The result would only be a (potential!) spurious printf
+		 * about a hot lock from the periodic thread at its next run,
+		 * and so the cost of a SEQ_CST atomic increment here is
+		 * not justified.
+		 */
+		leak->wdlist_period_lock_count++;
 	} else {
 		panic("SPL: %s:%d: where is my leak data?"
 		    " possible compilation mismatch", __func__, __LINE__);
@@ -574,10 +637,15 @@ spl_mutex_tryenter(kmutex_t *mp)
 		atomic_store_nonatomic(&mp->m_owner, current_thread());
 #ifdef SPL_DEBUG_MUTEX
 		if (likely(mp->leak)) {
+			/*
+			 * see block comment in mutex_enter()'s
+			 * SPL_DEBUG_MUTEX section, and below.
+			 */
 			struct leak *leak = (struct leak *)mp->leak;
 			leak->wdlist_locktime = gethrestime_sec();
 			leak->wdlist_total_trylock_success++;
 			leak->wdlist_total_lock_count++;
+			leak->wdlist_period_lock_count++;
 			strlcpy(leak->location_file, file,
 			    SPL_DEBUG_MUTEX_MAXCHAR);
 			strlcpy(leak->location_function, func,
@@ -590,9 +658,24 @@ spl_mutex_tryenter(kmutex_t *mp)
 		}
 
 	} else {
+		/*
+		 * We are not protected by the lock here, so our
+		 * read-modify-writes must be done atomically, since in the
+		 * periodic spl_wdlist_check() thread these memory locations
+		 * may also have a racing ("simultaneous") RMW.  Here we
+		 * avoid the periodic thread potentially not seeing the
+		 * trylock miss that would just go over the threshold for
+		 * a diagnostic printf.
+		 *
+		 * The xnu code below lck_mtx_try_lock() for a miss is
+		 * substantially more expensive than the cost of these atomic
+		 * increments, so we shouldn't be doing mutex_trylock() in
+		 * a tight loop anyway.
+		 */
 		VERIFY3P(mp->leak, !=, NULL);
 		struct leak *leak = (struct leak *)mp->leak;
 		atomic_inc_64(&leak->wdlist_total_trylock_miss);
+		atomic_inc_32(&leak->wdlist_period_trylock_miss);
 #endif
 	}
 	return (held);
