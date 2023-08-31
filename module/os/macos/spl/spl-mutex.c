@@ -98,7 +98,7 @@ inline static void
 spl_wdlist_check(void *ignored)
 {
 	struct leak *mp;
-	uint64_t prev_noe = 0; /* seconds */
+	uint64_t prev_noe = gethrestime_sec(); /* we time in seconds */
 
 	printf("SPL: Mutex watchdog is alive\n");
 
