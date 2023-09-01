@@ -118,6 +118,13 @@ spl_wdlist_check(void *ignored)
 		    "mutex watchdog napping",
 		    &ts);
 
+		/*
+		 * this assertion will fail deliberately (0 == 35)
+		 * when this thread is woken up by
+		 * spl_mutex_subsystem_fini(), but it's also good to
+		 * know if anything other than EAGAIN is seen before
+		 * then, for now.  (this *is* SPL_DEBUG_MUTEX after all :-) )
+		 */
 		ASSERT3S(msleep_result, ==, EAGAIN);
 
 		spl_data_barrier();
@@ -151,12 +158,16 @@ spl_wdlist_check(void *ignored)
 				printf("SPL: hot lock mutex (%p)"
 				    " [created %s:%s:%d]"
 				    " locked %u times in %llu seconds,"
-				    " hottest was %u\n",
+				    " hottest was %u"
+				    " [last locked by %s:%s:%d]\n",
 				    mp,
 				    mp->creation_file, mp->creation_function,
 				    mp->creation_line, period_locks,
 				    noe - prev_noe,
-				    period_lock_record_holder);
+				    period_lock_record_holder,
+				    mp->last_locked_file,
+				    mp->last_locked_function,
+				    mp->last_locked_line);
 				if (period_locks > period_lock_record_holder)
 					period_lock_record_holder =
 					    period_locks;
@@ -168,19 +179,30 @@ spl_wdlist_check(void *ignored)
 				printf("SPL: hot miss mutex (%p)"
 				    " [created %s:%s:%d]"
 				    " had %u mutex_trylock misses in"
-				    " %llu seconds, hottest was %u\n",
+				    " %llu seconds, hottest was %u"
+				    " [last locked by %s:%s:%d]\n",
 				    mp,
 				    mp->creation_file, mp->creation_function,
 				    mp->creation_line, period_trymiss,
 				    noe - prev_noe,
-				    period_miss_record_holder);
+				    period_miss_record_holder,
+				    mp->last_locked_file,
+				    mp->last_locked_function,
+				    mp->last_locked_line);
 				if (period_trymiss > period_miss_record_holder)
 					period_miss_record_holder =
 					    period_trymiss;
 			}
 
 		} // for all
+
+		/* decay "high score" record by 1% every pass */
+		period_lock_record_holder =
+		    (period_lock_record_holder * 100) / 99;
+		period_miss_record_holder =
+		    (period_miss_record_holder * 100) / 99;
 		prev_noe = noe;
+
 	} // while not exit
 
 	wdlist_exit = 0;
