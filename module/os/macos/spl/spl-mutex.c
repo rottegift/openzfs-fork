@@ -37,6 +37,7 @@
 #include <sys/debug.h>
 #include <kern/debug.h>
 #include <sys/thread.h>
+#include <stdbool.h>
 
 // Not defined in headers
 extern boolean_t lck_mtx_try_lock(lck_mtx_t *lck);
@@ -67,6 +68,8 @@ struct leak {
 	list_node_t	mutex_leak_node;
 
 #define	SPL_DEBUG_MUTEX_MAXCHAR 32
+	bool		destroyed_tombstone;
+	bool		is_unlocked;
 	char		location_file[SPL_DEBUG_MUTEX_MAXCHAR];
 	char		location_function[SPL_DEBUG_MUTEX_MAXCHAR];
 	int		location_line;
@@ -385,6 +388,7 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 	strlcpy(leak->creation_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
 	leak->creation_line = line;
 	leak->mp = mp;
+	leak->is_unlocked = true;
 
 	lck_mtx_lock((lck_mtx_t *)&mutex_list_mtx);
 	list_link_init(&leak->mutex_leak_node);
@@ -398,8 +402,13 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 void
 spl_mutex_destroy(kmutex_t *mp)
 {
+
+#ifdef SPL_DEBUG_MUTEX
+	VERIFY3U(mp, !=, NULL);
+#else
 	if (!mp)
 		return;
+#endif
 
 #ifdef SPL_DEBUG_MUTEX
 	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
@@ -418,6 +427,11 @@ spl_mutex_destroy(kmutex_t *mp)
 	struct leak *leak = (struct leak *)mp->leak;
 
 	VERIFY3P(leak, !=, NULL);
+
+	VERIFY3P(atomic_load_nonatomic(leak->is_destroyed), ==, false);
+
+	VERIFY3P(atomic_load_nonatomic(leak->is_unlocked), ==, true);
+
 
 	/* WAGs, but they rise dynamically on very fast&busy systems */
 
@@ -549,12 +563,16 @@ spl_mutex_enter(kmutex_t *mp)
 #ifdef SPL_DEBUG_MUTEX
 	if (likely(mp->leak)) {
 		/*
-		 * We have the lock here, so our leak structure will not be
-		 * interfered with by other mutex_* functions operating on
+		 * We have the mutex lock here, so our leak structure will not
+		 * be interfered with by other mutex_* functions operating on
 		 * this lock, except for the periodic spl_wdlist_check()
 		 * thread (see below) or a mutex_tryenter() (which will fail)
 		 */
 		struct leak *leak = (struct leak *)mp->leak;
+
+		VERIFY3U(leak->destroyed_tombstone, ==, false);
+		VERIFY3U(leak->is_unlocked, ==, true);
+
 		leak->wdlist_locktime = gethrestime_sec();
 		strlcpy(leak->location_file,
 		    file, sizeof (leak->location_file));
@@ -586,6 +604,8 @@ spl_mutex_enter(kmutex_t *mp)
 		 * not justified.
 		 */
 		leak->wdlist_period_lock_count++;
+
+		leak->is_unlocked = false;
 	} else {
 		panic("SPL: %s:%d: where is my leak data?"
 		    " possible compilation mismatch", __func__, __LINE__);
@@ -607,11 +627,13 @@ spl_mutex_exit(kmutex_t *mp)
 
 #ifdef SPL_DEBUG_MUTEX
 	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
-#endif
 
-#ifdef SPL_DEBUG_MUTEX
 	if (likely(mp->leak)) {
 		struct leak *leak = (struct leak *)mp->leak;
+
+		VERIFY3U(leak->destroyed_tombstone, ==, false);
+		VERIFY3U(leak->is_unlocked, ==, false);
+
 		uint64_t locktime = leak->wdlist_locktime;
 		uint64_t noe = gethrestime_sec();
 		if ((locktime > 0) && (noe > locktime) &&
@@ -622,10 +644,13 @@ spl_mutex_exit(kmutex_t *mp)
 			    leak->location_file, leak->location_function,
 			    leak->location_line);
 		}
+		leak->is_unlocked = true;
+/*
 		leak->wdlist_locktime = 0;
 		leak->location_file[0] = 0;
 		leak->location_function[0] = 0;
 		leak->location_line = 0;
+*/
 	} else {
 		panic("SPL: %s:%d: where is my leak data?",
 		    __func__, __LINE__);
