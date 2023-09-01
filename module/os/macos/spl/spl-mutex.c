@@ -67,9 +67,9 @@ struct leak {
 	list_node_t	mutex_leak_node;
 
 #define	SPL_DEBUG_MUTEX_MAXCHAR 32
-	char		location_file[SPL_DEBUG_MUTEX_MAXCHAR];
-	char		location_function[SPL_DEBUG_MUTEX_MAXCHAR];
-	int		location_line;
+	char		last_locked_file[SPL_DEBUG_MUTEX_MAXCHAR];
+	char		last_locked_function[SPL_DEBUG_MUTEX_MAXCHAR];
+	int		last_locked_line;
 	void		*mp;
 
 	uint64_t	wdlist_locktime;	// time lock was taken
@@ -132,9 +132,9 @@ spl_wdlist_check(void *ignored)
 				printf("SPL: mutex (%p) held for %llus by "
 				    "'%s':%s:%d\n", mp,
 				    noe - mp->wdlist_locktime,
-				    mp->location_file,
-				    mp->location_function,
-				    mp->location_line);
+				    mp->last_locked_file,
+				    mp->last_locked_function,
+				    mp->last_locked_line);
 			} // if old
 
 #define	HIGH_LOCKS_PER_RUN		10000
@@ -277,10 +277,12 @@ spl_mutex_subsystem_fini(void)
 		    runner = runner ? list_next(&mutex_list, runner) :
 		    list_head(&mutex_list)) {
 
-			if (strcmp(leak->location_file, runner->location_file)
-			    == 0 && strcmp(leak->location_function,
-			    runner->location_function) == 0 &&
-			    leak->location_line == runner->location_line) {
+			if (strcmp(leak->last_locked_file,
+			    runner->last_locked_file) == 0 &&
+			    strcmp(leak->last_locked_function,
+			    runner->last_locked_function) == 0 &&
+			    leak->last_locked_line ==
+			    runner->last_locked_line) {
 				// Same place
 				found++;
 				list_remove(&mutex_list, runner);
@@ -297,9 +299,9 @@ spl_mutex_subsystem_fini(void)
 		    "try_s %llu try_w %llu\n",
 		    __func__, __LINE__,
 		    leak->mp,
-		    leak->location_file,
-		    leak->location_function,
-		    leak->location_line,
+		    leak->last_locked_file,
+		    leak->last_locked_function,
+		    leak->last_locked_line,
 		    found,
 		    NSEC2SEC(gethrtime() - leak->wdlist_mutex_created_time),
 		    leak->creation_file,
@@ -378,9 +380,9 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 	memset(leak, 0, sizeof (struct leak));
 
 	leak->wdlist_mutex_created_time = gethrtime();
-	strlcpy(leak->location_file, file, SPL_DEBUG_MUTEX_MAXCHAR);
-	strlcpy(leak->location_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
-	leak->location_line = line;
+	strlcpy(leak->last_locked_file, file, SPL_DEBUG_MUTEX_MAXCHAR);
+	strlcpy(leak->last_locked_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
+	leak->last_locked_line = line;
 	strlcpy(leak->creation_file, file, SPL_DEBUG_MUTEX_MAXCHAR);
 	strlcpy(leak->creation_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
 	leak->creation_line = line;
@@ -444,14 +446,17 @@ spl_mutex_destroy(kmutex_t *mp)
 		    meanlps > hot_thresh) {
 			printf("SPL: %s:%d: destroyed hot lock (mean lps %llu)"
 			    " %llu mutex_enters since creation at %s:%s:%d"
-			    " %llu seconds ago (hot was %llu lps)\n",
+			    " %llu seconds ago (hot was %llu lps)"
+			    " [most recent lock %s:%s:%d]\n",
 			    __func__, __LINE__,
 			    meanlps,
 			    leak->wdlist_total_lock_count,
 			    leak->creation_file, leak->creation_function,
 			    leak->creation_line,
 			    secage,
-			    busy_lock_per_second_record_holder);
+			    busy_lock_per_second_record_holder,
+			    leak->last_locked_file,
+			    leak->last_locked_function, leak->last_locked_line);
 
 			/* update the global record holder */
 			uint8_t b_lck = false;
@@ -488,7 +493,8 @@ spl_mutex_destroy(kmutex_t *mp)
 			    " %llu all locks,"
 			    " %llu trysuccess, %llu miss, notheldpct %llu,"
 			    " created %llu seconds ago at %s:%s:%d"
-			    " (thresh was %llu miss/s)\n",
+			    " (thresh was %llu miss/s)"
+			    " [most recent lock location %s:%s:%d]\n",
 			    __func__, __LINE__,
 			    leak->wdlist_total_lock_count,
 			    leak->wdlist_total_trylock_success,
@@ -498,7 +504,9 @@ spl_mutex_destroy(kmutex_t *mp)
 			    leak->wdlist_mutex_created_time),
 			    leak->creation_file, leak->creation_function,
 			    leak->creation_line,
-			    miss_per_second_record_holder);
+			    miss_per_second_record_holder,
+			    leak->last_locked_file,
+			    leak->last_locked_function, leak->last_locked_line);
 
 			/* update the global record holder */
 			uint8_t b_lck = false;
@@ -561,11 +569,11 @@ spl_mutex_enter(kmutex_t *mp)
 		 */
 		struct leak *leak = (struct leak *)mp->leak;
 		leak->wdlist_locktime = gethrestime_sec();
-		strlcpy(leak->location_file,
-		    file, sizeof (leak->location_file));
-		strlcpy(leak->location_function,
-		    func, sizeof (leak->location_function));
-		leak->location_line = line;
+		strlcpy(leak->last_locked_file,
+		    file, sizeof (leak->last_locked_file));
+		strlcpy(leak->last_locked_function,
+		    func, sizeof (leak->last_locked_function));
+		leak->last_locked_line = line;
 		leak->wdlist_total_lock_count++;
 		/*
 		 * We allow a possible inaccuracy here by not
@@ -624,13 +632,10 @@ spl_mutex_exit(kmutex_t *mp)
 			printf("SPL: mutex (%p) finally released after %llus "
 			    "was held by %s:'%s':%d\n",
 			    leak, noe - leak->wdlist_locktime,
-			    leak->location_file, leak->location_function,
-			    leak->location_line);
+			    leak->last_locked_file, leak->last_locked_function,
+			    leak->last_locked_line);
 		}
 		leak->wdlist_locktime = 0;
-		leak->location_file[0] = 0;
-		leak->location_function[0] = 0;
-		leak->location_line = 0;
 	} else {
 		panic("SPL: %s:%d: where is my leak data?",
 		    __func__, __LINE__);
@@ -704,11 +709,11 @@ spl_mutex_tryenter(kmutex_t *mp)
 			leak->wdlist_total_trylock_success++;
 			leak->wdlist_total_lock_count++;
 			leak->wdlist_period_lock_count++;
-			strlcpy(leak->location_file, file,
+			strlcpy(leak->last_locked_file, file,
 			    SPL_DEBUG_MUTEX_MAXCHAR);
-			strlcpy(leak->location_function, func,
+			strlcpy(leak->last_locked_function, func,
 			    SPL_DEBUG_MUTEX_MAXCHAR);
-			leak->location_line = line;
+			leak->last_locked_line = line;
 		} else {
 			panic("SPL: %s:%d: where is my leak data?",
 			    __func__, __LINE__);
@@ -775,9 +780,9 @@ spl_dbg_mutex_destroy(kmutex_t *mp, const char *file,
 			    " %llus ago"
 			    "\n",
 			    __func__, o, func, file, line,
-			    leak->location_file,
-			    leak->location_function,
-			    leak->location_line,
+			    leak->last_locked_file,
+			    leak->last_locked_function,
+			    leak->last_locked_line,
 			    noe - leak->wdlist_locktime);
 		} else {
 			panic("%s: mutex %p is owned by"
@@ -787,9 +792,9 @@ spl_dbg_mutex_destroy(kmutex_t *mp, const char *file,
 			    " %llus ago"
 			    "\n",
 			    __func__, o, func, file, line,
-			    leak->location_file,
-			    leak->location_function,
-			    leak->location_line,
+			    leak->last_locked_file,
+			    leak->last_locked_function,
+			    leak->last_locked_line,
 			    noe - leak->wdlist_locktime);
 		}
 	}
