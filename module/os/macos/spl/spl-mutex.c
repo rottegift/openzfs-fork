@@ -425,14 +425,10 @@ spl_mutex_destroy(kmutex_t *mp)
 #define	BUSY_LOCK_PER_SECOND_THRESHOLD		1000
 
 	/*
-	 * Multiple mutex_destroy() can be in flight from different
-	 * threads, so these have to be protected.  Easiest to do
-	 * with an _Atomic declaration, since we're just doing
-	 * straightforward compares and new-value stores, and it does not
-	 * especially matter what order the mutex_destroy()s arrive in,
-	 * i.e., ACQUIRE/RELEASE/ACQ_REL memory order would be fine here,
-	 * and we are very likely to be happy with what an Apple Silicon
-	 * compiler chooses as default here.  See comment further below.
+	 * Multiple mutex_destroy() can be in flight from different threads,
+	 * so these have to be protected.  We can do that _Atomic declaration
+	 * and the short CAS loop below, since we're just doing
+	 * straightforward compares and new-value stores.
 	 */
 	static _Atomic uint64_t busy_lock_per_second_record_holder = 0;
 
@@ -456,27 +452,22 @@ spl_mutex_destroy(kmutex_t *mp)
 			    leak->creation_line,
 			    secage,
 			    busy_lock_per_second_record_holder);
-			/*
-			 * We permit a small race here to avoid a mutex
-			 * locking out any concurrent mutex_destroy(); it is
-			 * possible that another thread is right here (for a
-			 * different mutex than this one) with its meanlps
-			 * higher than THIS meanlps, in which case the record
-			 * may end up being either one.  We get some relief on
-			 * this from spl_data_barrier()s ordering the xnu
-			 * locking/unlocking, and being wrong is far from fatal,
-			 * since it only controls when we do the printf above.
-			 * This is likely to be a real-world race, but not
-			 * worth coding an atomic-compare-exchange loop.
-			 */
-			if (meanlps > busy_lock_per_second_record_holder)
-				busy_lock_per_second_record_holder = meanlps;
+
+			/* update the global record holder */
+			uint8_t b_lck = false;
+			while (meanlps > busy_lock_per_second_record_holder) {
+				if (!atomic_cas_8(&b_lck, false, true)) {
+					busy_lock_per_second_record_holder =
+					    meanlps;
+				}
+			}
 		}
 	}
 
 #define	TRYLOCK_CALL_THRESHOLD	1000 * 1000
 #define	TRYLOCK_WAIT_MIN_PCT	2		// mutex_trylock misses as %
 
+	static _Atomic uint64_t miss_per_second_record_holder = 0;
 
 	const uint64_t try_calls =
 	    leak->wdlist_total_trylock_success +
@@ -487,13 +478,17 @@ spl_mutex_destroy(kmutex_t *mp)
 	if (try_misses > 0 && try_calls > TRYLOCK_CALL_THRESHOLD) {
 		const uint64_t notheldpct =
 		    (try_misses * 100) / try_calls;
+		const uint64_t miss_thresh =
+		    (miss_per_second_record_holder * 100) / 90;
 
-		if (notheldpct > TRYLOCK_WAIT_MIN_PCT) {
+		if (notheldpct > TRYLOCK_WAIT_MIN_PCT &&
+		    notheldpct > miss_thresh) {
 			printf("SPL: %s:%d: destroyed lock which"
 			    " waited often in mutex_trylock:"
 			    " %llu all locks,"
 			    " %llu trysuccess, %llu miss, notheldpct %llu,"
-			    " created %llu seconds ago at %s:%s:%d\n",
+			    " created %llu seconds ago at %s:%s:%d"
+			    " (thresh was %llu miss/s)\n",
 			    __func__, __LINE__,
 			    leak->wdlist_total_lock_count,
 			    leak->wdlist_total_trylock_success,
@@ -502,7 +497,17 @@ spl_mutex_destroy(kmutex_t *mp)
 			    NSEC2SEC(gethrtime() -
 			    leak->wdlist_mutex_created_time),
 			    leak->creation_file, leak->creation_function,
-			    leak->creation_line);
+			    leak->creation_line,
+			    miss_per_second_record_holder);
+
+			/* update the global record holder */
+			uint8_t b_lck = false;
+			while (notheldpct > miss_per_second_record_holder) {
+				if (!atomic_cas_8(&b_lck, false, true)) {
+					miss_per_second_record_holder =
+					    notheldpct;
+				}
+			}
 		}
 	}
 
