@@ -410,13 +410,15 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 	leak->creation_line = line;
 	leak->mp = mp;
 
+	spl_data_barrier();
+
 	lck_mtx_lock((lck_mtx_t *)&mutex_list_mtx);
 	list_link_init(&leak->mutex_leak_node);
 	list_insert_tail(&mutex_list, leak);
 	mp->leak = leak;
 	lck_mtx_unlock((lck_mtx_t *)&mutex_list_mtx);
 #endif
-
+	spl_data_barrier();
 }
 
 void
