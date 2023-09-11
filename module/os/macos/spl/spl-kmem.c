@@ -4263,8 +4263,8 @@ kmem_cache_build_slablist(kmem_cache_t *cp)
 	    sp = list_next(&cp->cache_complete_slabs, sp)) {
 		fs = IOMallocType(struct free_slab);
 		memset(fs, '\0', sizeof (struct free_slab));
-		strncpy(fs->vm_name, vmp->vm_name, VMEM_NAMELEN);
-		strncpy(fs->cache_name, cp->cache_name,
+		strlcpy(fs->vm_name, vmp->vm_name, VMEM_NAMELEN);
+		strlcpy(fs->cache_name, cp->cache_name,
 		    KMEM_CACHE_NAMELEN);
 		fs->vmp = vmp;
 		fs->slabsize = cp->cache_slabsize;
@@ -4279,8 +4279,8 @@ kmem_cache_build_slablist(kmem_cache_t *cp)
 
 		fs = IOMallocType(struct free_slab);
 		memset(fs, '\0', sizeof (struct free_slab));
-		strncpy(fs->vm_name, vmp->vm_name, VMEM_NAMELEN);
-		strncpy(fs->cache_name, cp->cache_name,
+		strlcpy(fs->vm_name, vmp->vm_name, VMEM_NAMELEN);
+		strlcpy(fs->cache_name, cp->cache_name,
 		    KMEM_CACHE_NAMELEN);
 		fs->vmp = vmp;
 		fs->slabsize = cp->cache_slabsize;
