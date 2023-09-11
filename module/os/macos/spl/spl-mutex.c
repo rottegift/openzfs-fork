@@ -424,8 +424,8 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 void
 spl_mutex_destroy(kmutex_t *mp)
 {
-	if (!mp)
-		return;
+
+	VERIFY3P(mp, !=, NULL);
 
 #ifdef SPL_DEBUG_MUTEX
 	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
