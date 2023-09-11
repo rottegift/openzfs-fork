@@ -66,16 +66,18 @@ static uint64_t mutex_list_wait_loc;
 struct leak {
 	list_node_t	mutex_leak_node;
 
-#define	SPL_DEBUG_MUTEX_MAXCHAR 32
-	char		last_locked_file[SPL_DEBUG_MUTEX_MAXCHAR];
-	char		last_locked_function[SPL_DEBUG_MUTEX_MAXCHAR];
+#define	SPL_DEBUG_MUTEX_MAXCHAR_FUNC 24
+#define SPL_DEBUG_MUTEX_MAXCHAR_FILE 40 /* __FILE__ may have ../../... */
+
+	char		last_locked_file[SPL_DEBUG_MUTEX_MAXCHAR_FILE];
+	char		last_locked_function[SPL_DEBUG_MUTEX_MAXCHAR_FUNC];
 	int		last_locked_line;
 	void		*mp;
 
 	uint64_t	locktime;	// time lock was taken
 	hrtime_t	mutex_created_time;
-	char		creation_file[SPL_DEBUG_MUTEX_MAXCHAR];
-	char		creation_function[SPL_DEBUG_MUTEX_MAXCHAR];
+	char		creation_file[SPL_DEBUG_MUTEX_MAXCHAR_FILE];
+	char		creation_function[SPL_DEBUG_MUTEX_MAXCHAR_FUNC];
 	int		creation_line;
 	uint64_t	total_lock_count;
 	uint64_t	total_trylock_success;
@@ -402,11 +404,11 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 	memset(leak, 0, sizeof (struct leak));
 
 	leak->mutex_created_time = gethrtime();
-	strlcpy(leak->last_locked_file, file, SPL_DEBUG_MUTEX_MAXCHAR);
-	strlcpy(leak->last_locked_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
+	strlcpy(leak->last_locked_file, file, SPL_DEBUG_MUTEX_MAXCHAR_FILE);
+	strlcpy(leak->last_locked_function, fn, SPL_DEBUG_MUTEX_MAXCHAR_FUNC);
 	leak->last_locked_line = line;
-	strlcpy(leak->creation_file, file, SPL_DEBUG_MUTEX_MAXCHAR);
-	strlcpy(leak->creation_function, fn, SPL_DEBUG_MUTEX_MAXCHAR);
+	strlcpy(leak->creation_file, file, SPL_DEBUG_MUTEX_MAXCHAR_FILE);
+	strlcpy(leak->creation_function, fn, SPL_DEBUG_MUTEX_MAXCHAR_FUNC);
 	leak->creation_line = line;
 	leak->mp = mp;
 
@@ -424,8 +426,8 @@ spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc)
 void
 spl_mutex_destroy(kmutex_t *mp)
 {
-	if (!mp)
-		return;
+
+	VERIFY3P(mp, !=, NULL);
 
 #ifdef SPL_DEBUG_MUTEX
 	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
@@ -734,9 +736,9 @@ spl_mutex_tryenter(kmutex_t *mp)
 			leak->total_lock_count++;
 			leak->period_lock_count++;
 			strlcpy(leak->last_locked_file, file,
-			    SPL_DEBUG_MUTEX_MAXCHAR);
+			    SPL_DEBUG_MUTEX_MAXCHAR_FILE);
 			strlcpy(leak->last_locked_function, func,
-			    SPL_DEBUG_MUTEX_MAXCHAR);
+			    SPL_DEBUG_MUTEX_MAXCHAR_FUNC);
 			leak->last_locked_line = line;
 		} else {
 			panic("SPL: %s:%d: where is my leak data?",
