@@ -1789,7 +1789,7 @@ dnode_rele_and_unlock(dnode_t *dn, const void *tag, boolean_t evicting)
 #endif
 #ifdef DEBUG
 	if (!(refs > 0 || dnh->dnh_zrlock.zr_owner != curthread)) {
-		panic("SPL ZFS: smd: refs should be 0 (refs == %ld)"
+		panic("SPL ZFS: smd: refs should be 0 (refs == %llu)"
 		    " or owner should be someone else (it's %s)\n",
 		    refs,
 		    (dnh->dnh_zrlock.zr_owner != curthread)
