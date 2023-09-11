@@ -66,7 +66,7 @@ static uint64_t mutex_list_wait_loc;
 struct leak {
 	list_node_t	mutex_leak_node;
 
-#define	SPL_DEBUG_MUTEX_MAXCHAR 32
+#define	SPL_DEBUG_MUTEX_MAXCHAR 48
 	char		last_locked_file[SPL_DEBUG_MUTEX_MAXCHAR];
 	char		last_locked_function[SPL_DEBUG_MUTEX_MAXCHAR];
 	int		last_locked_line;
