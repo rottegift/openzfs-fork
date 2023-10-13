@@ -67,7 +67,7 @@ struct leak {
 	list_node_t	mutex_leak_node;
 
 #define	SPL_DEBUG_MUTEX_MAXCHAR_FUNC 24
-#define SPL_DEBUG_MUTEX_MAXCHAR_FILE 40 /* __FILE__ may have ../../... */
+#define	SPL_DEBUG_MUTEX_MAXCHAR_FILE 40 /* __FILE__ may have ../../... */
 
 	char		last_locked_file[SPL_DEBUG_MUTEX_MAXCHAR_FILE];
 	char		last_locked_function[SPL_DEBUG_MUTEX_MAXCHAR_FUNC];
