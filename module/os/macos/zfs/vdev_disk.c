@@ -836,7 +836,26 @@ vdev_disk_init(void)
 
 	VERIFY(vdev_disk_taskq_asyncr);
 
-	int lowcpus = MAX(1, (cpus + 1) / 2);
+	/*
+	 * lowcpus: kstat.unix.taskq.vdev_dksk_taskq_scrub.threads
+	 *
+	 * There is a trade-off here between a fast dsl_scan (for scrubs and
+	 * olde-style resilvers) and overwhelming the system.  Some of the
+	 * balance is how much CPU activity is done by checksumming, which is
+	 * out of scope here.  One-half of the non-Ecores is good if there are
+	 * few active leaf vdevs in the pool, or if the leaf vdevs are
+	 * relatively slow.  However, on very wide pools (e.g. 16 disks in
+	 * mirrors; 8 SATA SSDs in mirrors) or very fast pools this turned out
+	 * to be a little too high when using SHA-256 on an M1 Studio Ultra.
+	 *
+	 * One fourth of the non-Ecores seems to work fine, and in reality
+	 * we could live without any fan-out here at all (i.e., lowcpus = 1)
+	 * since we will rarely be a choke-point (i.e. kstat...scrub.maxtasks will be
+	 * fairly low compared to the other taskqs above and also in comparison
+	 * to kstat.unix.taskq.z_{rd,wr}_{int,iss}.maxtasks.
+	 */
+
+	int lowcpus = MAX(1, (cpus + 1) / 4);
 
 	vdev_disk_taskq_scrub = taskq_create("vdev_disk_taskq_scrub",
 	    50, dsl_scan_iss_syspri, lowcpus,
