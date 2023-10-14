@@ -871,14 +871,14 @@ vdev_disk_init(void)
 	 */
 
 	vdev_disk_taskq_asyncw = taskq_create("vdev_disk_taskq_asyncw",
-	    75, defclsyspri - 5, cpus,
-	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+	    cpus, defclsyspri - 5, 1,
+	    INT_MAX, TASKQ_PREPOPULATE);
 
 	VERIFY(vdev_disk_taskq_asyncw);
 
 	vdev_disk_taskq_asyncr = taskq_create("vdev_disk_taskq_asyncr",
-	    75, defclsyspri - 4, cpus,
-	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+	    cpus, defclsyspri - 4, 1,
+	    INT_MAX, TASKQ_PREPOPULATE);
 
 	VERIFY(vdev_disk_taskq_asyncr);
 
@@ -897,14 +897,14 @@ vdev_disk_init(void)
 	const int scrub_cpus = 1;
 
 	vdev_disk_taskq_scrub = taskq_create("vdev_disk_taskq_scrub",
-	    50, dsl_scan_iss_syspri, scrub_cpus,
-	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+	    scrub_cpus, dsl_scan_iss_syspri, 1,
+	    INT_MAX, TASKQ_PREPOPULATE);
 
 	VERIFY(vdev_disk_taskq_scrub);
 
 	vdev_disk_taskq_default = taskq_create("vdev_disk_taskq_default",
-	    50, defclsyspri, cpus,
-	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+	    cpus, defclsyspri, 1,
+	    INT_MAX, TASKQ_PREPOPULATE);
 
 	VERIFY(vdev_disk_taskq_default);
 }
