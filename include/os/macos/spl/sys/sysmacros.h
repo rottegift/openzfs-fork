@@ -120,7 +120,7 @@ extern unsigned int num_ecores;
  *
  * This value is just below the level of bluetoothd or userland audio
  */
-#define	dsl_scan_iss_syspri	59
+#define	DSL_SCAN_ISS_SYSPRI	59
 
 /*
  * Missing macros

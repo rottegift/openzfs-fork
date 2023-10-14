@@ -898,7 +898,7 @@ vdev_disk_init(void)
 	const int scrub_cpus = 1;
 
 	vdev_disk_taskq_scrub = taskq_create("vdev_disk_taskq_scrub",
-	    scrub_cpus, dsl_scan_iss_syspri, 1,
+	    scrub_cpus, DSL_SCAN_ISS_SYSPRI, 1,
 	    INT_MAX, TASKQ_PREPOPULATE);
 
 	VERIFY(vdev_disk_taskq_scrub);

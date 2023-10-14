@@ -332,8 +332,8 @@ spl_set_thread_importance(thread_t thread, pri_t pri, const char *name)
 	 * bluetoothd and userland audio, which are of relatively high
 	 * userland importance.
 	 */
-	else if (policy.importance < (-22))
-		policy.importance = -22;
+	else if (policy.importance < (DSL_SCAN_ISS_SYSPRI))
+		policy.importance = DSL_SCAN_ISS_SYSPRI;
 
 	int i = policy.importance;
 	kern_return_t pol_prec_kret = thread_policy_set(thread,
