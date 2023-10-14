@@ -811,11 +811,52 @@ vdev_ops_t vdev_disk_ops = {
 void
 vdev_disk_init(void)
 {
-	int cpus = max_ncpus - num_ecores;
 
 	/*
-	 * keep vdev_disk_taskq_stack in-order, since we
-	 * do not know what type of ZIO it is when we use it
+	 * The "cpus" variable generates tq_nthreads, the number of threads in
+	 * each taskq, reported in
+	 * kstat.unix.taskq.vdev_disk_taskq_{name}.threads.
+	 *
+	 * Fundamentally, this can be 1.  It works for all of these queues.
+	 * For synchronous I/O that is close to what we want, as a best-effort
+	 * towards serving our callers in FIFO order.  ZFS does a good job of
+	 * ordering calls to vdev_disk_io_start().
+	 *
+	 * However, our use of IOKit is fundamentally asynchronous. Therefore
+	 * we cannot guarantee that a set of taskq jobs A, B, C get callbacks
+	 * (vdev_disk_io_done) in the same order.  Consequently we are
+	 * interested in kstat...{name}.maxtasks, which represents the
+	 * greatest observed difference between the number of tasks in the
+	 * taskq and the number of completed tasks.  With more threads, that
+	 * number drops.
+	 *
+	 * What this means is that as "cpus" is increased, IOKit is likely to
+	 * have more inflight zfs-generated IOs to queue when there is system
+	 * contention that not directly visible to our kext.  There is a
+	 * trade-off between the benefits of lower-level queue management
+	 * (which varies in intelligence) and CPU.
+	 *
+	 * With heavy IO loads this trade-off can be seen in Activity Monitor
+	 * and spindump: higher CPU (spindump exposes the cpu time of each
+	 * of these taskq threads),  and the relative smoothness of disk I/O.
+	 *
+	 * These taskq_create priorities are high compared to userland -- and
+	 * IOKit activity and other system dynamics may temporarily boost the
+	 * dispatched IO to even higher priority -- during heavy IO we risk
+	 * starving userland of CPU with many busy high-priority threads
+	 * generating CPU use in IOKit and below.
+	 *
+	 * On all systems, therefore, we cap threads below max_cpus, and on
+	 * Apple Silicon we deflate further.
+	 */
+
+	const int cpus = MAX(1, max_ncpus - num_ecores - 2);
+
+	/*
+	 * Keep vdev_disk_taskq_stack as in-order as we can, and use
+	 * defclsyspri, since this can be any type of ZIO.  This taskq
+	 * is relatively rarely used, and is mainly to track when stacks
+	 * are too large.
 	 */
 
 	vdev_disk_taskq_stack = taskq_create("vdev_disk_taskq_stack",
@@ -824,8 +865,13 @@ vdev_disk_init(void)
 
 	VERIFY(vdev_disk_taskq_stack);
 
+	/*
+	 * Slightly reduce thread priority of async write threads relative to
+	 * aysnc reads; these come in bursts as TXGs are closed out.
+	 */
+
 	vdev_disk_taskq_asyncw = taskq_create("vdev_disk_taskq_asyncw",
-	    75, defclsyspri - 4, cpus,
+	    75, defclsyspri - 5, cpus,
 	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
 
 	VERIFY(vdev_disk_taskq_asyncw);
@@ -837,28 +883,21 @@ vdev_disk_init(void)
 	VERIFY(vdev_disk_taskq_asyncr);
 
 	/*
-	 * lowcpus: kstat.unix.taskq.vdev_dksk_taskq_scrub.threads
-	 *
-	 * There is a trade-off here between a fast dsl_scan (for scrubs and
-	 * olde-style resilvers) and overwhelming the system.  Some of the
-	 * balance is how much CPU activity is done by checksumming, which is
-	 * out of scope here.  One-half of the non-Ecores is good if there are
-	 * few active leaf vdevs in the pool, or if the leaf vdevs are
-	 * relatively slow.  However, on very wide pools (e.g. 16 disks in
-	 * mirrors; 8 SATA SSDs in mirrors) or very fast pools this turned out
-	 * to be a little too high when using SHA-256 on an M1 Studio Ultra.
-	 *
-	 * One fourth of the non-Ecores seems to work fine, and in reality
-	 * we could live without any fan-out here at all (i.e., lowcpus = 1)
-	 * since we will rarely be a choke-point (i.e. kstat...scrub.maxtasks will be
-	 * fairly low compared to the other taskqs above and also in comparison
-	 * to kstat.unix.taskq.z_{rd,wr}_{int,iss}.maxtasks.
+	 * Reads (including prefetches) for scans ("scrubs", however these can
+	 * also be issued during resilvers) are asynchronous and
+	 * low-priority. They tend to generate the highest amount of work in
+	 * IOKit and below. There is always significant (and with some
+	 * checksums, serious) CPU activity done when the IO completes.  New
+	 * style scrubbing and resilvering do heroic efforts to sequentialize
+	 * these IOs. Therefore scrub_cpus should be the lowest number that
+	 * does not wreck scrub/resilver throughput.  Increasing beyond that
+	 * starves userland of CPU.
 	 */
 
-	int lowcpus = MAX(1, (cpus + 1) / 4);
+	const int scrub_cpus = 1;
 
 	vdev_disk_taskq_scrub = taskq_create("vdev_disk_taskq_scrub",
-	    50, dsl_scan_iss_syspri, lowcpus,
+	    50, dsl_scan_iss_syspri, scrub_cpus,
 	    INT_MAX, TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
 
 	VERIFY(vdev_disk_taskq_scrub);
