@@ -890,8 +890,9 @@ vdev_disk_init(void)
 	 * checksums, serious) CPU activity done when the IO completes.  New
 	 * style scrubbing and resilvering do heroic efforts to sequentialize
 	 * these IOs. Therefore scrub_cpus should be the lowest number that
-	 * does not wreck scrub/resilver throughput.  Increasing beyond that
-	 * starves userland of CPU.
+	 * does not wreck scrub/resilver throughput.  Empirically this appears
+	 * to be 1.  Increasing beyond that starves userland of CPU for no
+	 * good purpose.
 	 */
 
 	const int scrub_cpus = 1;

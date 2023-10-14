@@ -328,12 +328,12 @@ spl_set_thread_importance(thread_t thread, pri_t pri, const char *name)
 	if (policy.importance > 0)
 		policy.importance = 0;
 	/*
-	 * set a floor on importance at priority 60, which is about the same
-	 * as bluetoothd and userland audio, which are of relatively high
-	 * importance.
+	 * set a floor on importance at priority 59, which is just below
+	 * bluetoothd and userland audio, which are of relatively high
+	 * userland importance.
 	 */
-	else if (policy.importance < (-21))
-		policy.importance = -21;
+	else if (policy.importance < (-22))
+		policy.importance = -22;
 
 	int i = policy.importance;
 	kern_return_t pol_prec_kret = thread_policy_set(thread,
