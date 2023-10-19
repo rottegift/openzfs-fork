@@ -39,12 +39,14 @@
  * ASSERT3U()	- Assert unsigned X OP Y is true, if not panic.
  * ASSERT3P()	- Assert pointer X OP Y is true, if not panic.
  * ASSERT0()	- Assert value is zero, if not panic.
+ * ASSERT0P()	- Assert pointer is null, if not panic.
  * VERIFY()	- Verify X is true, if not panic.
  * VERIFY3B()	- Verify boolean X OP Y is true, if not panic.
  * VERIFY3S()	- Verify signed X OP Y is true, if not panic.
  * VERIFY3U()	- Verify unsigned X OP Y is true, if not panic.
  * VERIFY3P()	- Verify pointer X OP Y is true, if not panic.
  * VERIFY0()	- Verify value is zero, if not panic.
+ * VERIFY0P()	- Verify pointer is null, if not panic.
  */
 
 #ifndef _SPL_DEBUG_H
@@ -154,6 +156,15 @@ void print_symbol(uintptr_t symbol);
 		    (long long) (_verify3_right));			\
 	} while (0)
 
+#define	VERIFY0P(RIGHT)	do {						\
+		const uintptr_t _verify0_right = (uintptr_t)(RIGHT);	\
+		if (unlikely(!(0 == _verify0_right)))			\
+		    spl_panic(__FILE__, __FUNCTION__, __LINE__,		\
+		    "VERIFY0P(" #RIGHT ") "				\
+		    "failed (NULL == %p)\n",				\
+		    (void *)_verify0_right);				\
+	} while (0)
+
 #define	CTASSERT_GLOBAL(x)		_CTASSERT(x, __LINE__)
 #define	CTASSERT(x)				{ _CTASSERT(x, __LINE__); }
 #define	_CTASSERT(x, y)			__CTASSERT(x, y)
@@ -201,6 +212,7 @@ void print_symbol(uintptr_t symbol);
 #define	ASSERT3U	VERIFY3U
 #define	ASSERT3P	VERIFY3P
 #define	ASSERT0		VERIFY0
+#define	ASSERT0P	VERIFY0P
 #define	ASSERT		VERIFY
 #define	ASSERTV(X)	X __maybe_unused
 #define	IMPLY(A, B) \
@@ -252,6 +264,7 @@ __attribute__((noinline)) int assfail(const char *str, const char *file,
 
 #define	ASSERT3P(x, y, z) ASSERT3_IMPL(x, y, z, uintptr_t, "%p", (void *))
 #define	ASSERT0(x)	ASSERT3_IMPL(0, ==, x, int64_t, "%lld", (long long))
+#define	ASSERT0P(x)	ASSERT3_IMPL(0, ==, x, uintptr_t, "%p", (void *))
 #define	ASSERTV(x)	x
 
 
