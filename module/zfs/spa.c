@@ -10803,10 +10803,10 @@ ZFS_MODULE_PARAM(zfs_spa, spa_, load_verify_data, INT, ZMOD_RW,
 ZFS_MODULE_PARAM(zfs_spa, spa_, load_print_vdev_tree, INT, ZMOD_RW,
 	"Print vdev tree to zfs_dbgmsg during pool import");
 
-ZFS_MODULE_PARAM(zfs_zio, zio_, taskq_batch_pct, UINT, ZMOD_RD,
+ZFS_MODULE_PARAM(zfs_zio, zio_, taskq_batch_pct, UINT, ZMOD_RW,
 	"Percentage of CPUs to run an IO worker thread");
 
-ZFS_MODULE_PARAM(zfs_zio, zio_, taskq_batch_tpq, UINT, ZMOD_RD,
+ZFS_MODULE_PARAM(zfs_zio, zio_, taskq_batch_tpq, UINT, ZMOD_RW,
 	"Number of threads per IO worker taskqueue");
 
 /* BEGIN CSTYLED */
