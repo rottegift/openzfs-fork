@@ -127,12 +127,18 @@ void spl_mutex_init(kmutex_t *mp, char *name, kmutex_type_t type, void *ibc);
 #define	mutex_enter(X) spl_mutex_enter((X), __FILE__, __func__, __LINE__)
 void spl_mutex_enter(kmutex_t *mp, const char *file,
     const char *func, const int line);
+#define	mutex_enter_interruptible(X) \
+	spl_mutex_enter_interruptible((X), __FILE__, __func__, __LINE__)
+int spl_mutex_enter_interruptible(kmutex_t *mp, const char *file,
+    const char *func, const int line);
 void spl_dbg_mutex_destroy(kmutex_t *, const char *,
     const char *, const int);
 #define	mutex_destroy(X) spl_dbg_mutex_destroy(X, __FILE__, __func__, __LINE__)
 #else
 #define	mutex_enter	spl_mutex_enter
 void spl_mutex_enter(kmutex_t *mp);
+#define	mutex_enter_interruptible	spl_mutex_enter_interruptible
+int spl_mutex_enter_interruptible(kmutex_t *mp);
 #define	mutex_destroy	spl_mutex_destroy
 #endif
 #define	mutex_enter_nested(A, B)	mutex_enter(A)

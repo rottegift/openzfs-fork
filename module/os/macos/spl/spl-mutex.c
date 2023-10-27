@@ -634,6 +634,100 @@ spl_mutex_enter(kmutex_t *mp)
 
 }
 
+
+/*
+ * So far, the interruptible part does not work, this just
+ * calls regular mutex_enter.
+ */
+#ifdef SPL_DEBUG_MUTEX
+int
+spl_mutex_enter_interruptible(kmutex_t *mp, const char *file,
+    const char *func, const int line)
+#else
+int
+spl_mutex_enter_interruptible(kmutex_t *mp)
+#endif
+{
+	int error = 0;
+#ifdef SPL_DEBUG_MUTEX
+	VERIFY3U(atomic_load_nonatomic(&mp->m_initialised), ==, MUTEX_INIT);
+#endif
+
+#ifdef DEBUG
+	if (unlikely(*((uint64_t *)mp) == 0xdeadbeefdeadbeef)) {
+		panic("SPL: mutex_enter deadbeef");
+		__builtin_unreachable();
+	}
+#endif
+
+	if (atomic_load_nonatomic(&mp->m_owner) == current_thread()) {
+		panic("mutex_enter: locking against myself!");
+		__builtin_unreachable();
+	}
+
+	atomic_inc_64(&mp->m_waiters);
+	spl_data_barrier();
+	lck_mtx_lock((lck_mtx_t *)&mp->m_lock);
+	spl_data_barrier();
+
+	if (error != 0)
+		goto interrupted;
+
+	atomic_dec_64(&mp->m_waiters);
+	atomic_store_nonatomic(&mp->m_owner, current_thread());
+
+#ifdef SPL_DEBUG_MUTEX
+	if (likely(mp->leak)) {
+		/*
+		 * We have the lock here, so our leak structure will not be
+		 * interfered with by other mutex_* functions operating on
+		 * this lock, except for the periodic spl_wdlist_check()
+		 * thread (see below) or a mutex_tryenter() (which will fail)
+		 */
+		struct leak *leak = (struct leak *)mp->leak;
+		leak->locktime = gethrestime_sec();
+		strlcpy(leak->last_locked_file,
+		    file, sizeof (leak->last_locked_file));
+		strlcpy(leak->last_locked_function,
+		    func, sizeof (leak->last_locked_function));
+		leak->last_locked_line = line;
+		leak->total_lock_count++;
+		/*
+		 * We allow a possible inaccuracy here by not
+		 * doing an atomic_inc_32() for the period lock.
+		 * The race can only be between this current thread
+		 * right here, and the spl_wdlist_check() periodic
+		 * read-modify-write.
+		 *
+		 * That RMW is done by an atomic_swap_32()
+		 * which uses SEQ_CST on Mac platforms,
+		 * which should order that read&zero against this
+		 * increment. In particular, the increment here shouldn't
+		 * be here_read_large_old_value_from_memory__to_register,
+		 * here_increment_register,
+		 * periodic_thread_sets_old_value_to_zero,
+		 * here_write_large_value_from_register_to_memory,
+		 * but it is technically possible (the race window is
+		 * very narrow!).
+		 *
+		 * The result would only be a (potential!) spurious printf
+		 * about a hot lock from the periodic thread at its next run,
+		 * and so the cost of a SEQ_CST atomic increment here is
+		 * not justified.
+		 */
+		leak->period_lock_count++;
+	} else {
+		panic("SPL: %s:%d: where is my leak data?"
+		    " possible compilation mismatch", __func__, __LINE__);
+		__builtin_unreachable();
+	}
+#endif
+
+interrupted:
+
+	return (error);
+}
+
 void
 spl_mutex_exit(kmutex_t *mp)
 {
