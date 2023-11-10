@@ -563,13 +563,7 @@ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_buf_t *db, int blksz,
 	zp->z_atime_dirty = 0;
 	zp->z_mapcnt = 0;
 	zp->z_id = db->db_object;
-
-	/* Start from ashift instead of 512 */
-	if (zfsvfs->z_os->os_spa->spa_min_alloc > 0)
-		zp->z_blksz = zfsvfs->z_os->os_spa->spa_min_alloc;
-	else
-		zp->z_blksz = blksz;
-
+	zp->z_blksz = blksz;
 	zp->z_seq = 0x7A4653;
 	zp->z_sync_cnt = 0;
 
