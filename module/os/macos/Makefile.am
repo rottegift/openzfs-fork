@@ -269,6 +269,7 @@ zfs_os_SRCS = \
 	%D%/zfs/sysctl_os.c \
 	%D%/zfs/vdev_disk.c \
 	%D%/zfs/vdev_file.c \
+	%D%/zfs/vdev_label_os.c \
 	%D%/zfs/zfs_acl.c \
 	%D%/zfs/zfs_boot.cpp \
 	%D%/zfs/zfs_ctldir.c \

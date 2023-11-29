@@ -96,6 +96,7 @@ static uint64_t zfs_vnops_read_chunk_size = 1024 * 1024;
 
 static ulong_t zfs_fsync_sync_cnt = 4;
 
+#ifndef __APPLE__
 int
 zfs_fsync(znode_t *zp, int syncflag, cred_t *cr)
 {
