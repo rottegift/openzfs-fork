@@ -58,6 +58,7 @@
 #include <sys/zfs_znode.h>
 
 
+#ifndef __APPLE__
 int
 zfs_fsync(znode_t *zp, int syncflag, cred_t *cr)
 {
