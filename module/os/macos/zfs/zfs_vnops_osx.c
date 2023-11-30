@@ -5098,9 +5098,6 @@ zfs_znode_asyncwait(zfsvfs_t *zfsvfs, znode_t *zp)
 	if (zfsvfs == NULL)
 		return (ret);
 
-	if ((error = zfs_enter(zfsvfs, FTAG)) != 0)
-		return (ret);
-
 	if (zfsvfs->z_os == NULL)
 		goto out;
 
@@ -5117,7 +5114,6 @@ zfs_znode_asyncwait(zfsvfs_t *zfsvfs, znode_t *zp)
 	mutex_exit(&zp->z_attach_lock);
 
 out:
-	zfs_exit(zfsvfs, FTAG);
 	return (ret);
 }
 
