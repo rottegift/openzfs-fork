@@ -48,6 +48,7 @@
 #include <sys/ZFSDatasetScheme.h>
 #include <sys/dsl_dir.h>
 #include <sys/dataset_kstats.h>
+#include <sys/spa_impl.h> // spa_freeze_txg
 
 unsigned int zfs_vnop_skip_unlinked_drain = 0;
 
@@ -2159,6 +2160,10 @@ zfs_vfs_unmount(struct mount *mp, int mntflags, vfs_context_t context)
 
 	/* Save osname for later */
 	dmu_objset_name(zfsvfs->z_os, osname);
+
+	spa_t *spa = dmu_objset_spa(zfsvfs->z_os);
+	if (spa != NULL)
+		spa->spa_freeze_txg = UINT64_MAX;
 
 	/*
 	 * We might skip the sync called in the unmount path, since
