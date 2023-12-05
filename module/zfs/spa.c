@@ -7693,10 +7693,11 @@ spa_vdev_attach(spa_t *spa, uint64_t guid, nvlist_t *nvroot, int replacing,
 	 * to make it distinguishable from newvd, and unopenable from now on.
 	 */
 	if (strcmp(oldvdpath, newvdpath) == 0) {
+		int n = strlen(newvdpath) + 5;
 		spa_strfree(oldvd->vdev_path);
-		oldvd->vdev_path = kmem_alloc(strlen(newvdpath) + 5,
+		oldvd->vdev_path = kmem_alloc(n,
 		    KM_SLEEP);
-		(void) snprintf(oldvd->vdev_path, strlen(newvdpath) + 5,
+		(void) snprintf(oldvd->vdev_path, n,
 		    "%s/old",
 		    newvdpath);
 		if (oldvd->vdev_devid != NULL) {
