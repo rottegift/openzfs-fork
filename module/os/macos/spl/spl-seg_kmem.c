@@ -289,23 +289,23 @@ segkmem_abd_init()
 
 	extern vmem_t *spl_heap_arena;
 
-#define	BIG_SLAB 131072
-#ifdef __arm64__
-#define	BIG_BIG_SLAB (BIG_SLAB * 2)
-#else
-#define	BIG_BIG_SLAB BIG_SLAB
-#endif
+	/*
+	 * Big slab sizes cannot be more than VMEM_HASH_INITIAL (i.e., 16)
+	 * times larger than the quantum, which is PAGESIZE.
+	 */
+
+#define BIG_SLAB (PAGESIZE * 16)
 
 #define	SMALL_RAM_MACHINE (4ULL * 1024ULL * 1024ULL * 1024ULL)
 
 	if (total_memory >= SMALL_RAM_MACHINE) {
 		abd_arena = vmem_create("abd_cache", NULL, 0,
 		    PAGESIZE, vmem_alloc_impl, vmem_free_impl, spl_heap_arena,
-		    BIG_BIG_SLAB, VM_SLEEP | VMC_NO_QCACHE);
+		    BIG_SLAB, VM_SLEEP | VMC_NO_QCACHE);
 	} else {
 		abd_arena = vmem_create("abd_cache", NULL, 0,
 		    PAGESIZE, vmem_alloc_impl, vmem_free_impl, spl_heap_arena,
-		    131072, VM_SLEEP | VMC_NO_QCACHE);
+		    PAGESIZE, VM_SLEEP | VMC_NO_QCACHE);
 	}
 
 	VERIFY3P(abd_arena, !=, NULL);
@@ -328,7 +328,7 @@ segkmem_abd_init()
 	} else {
 		abd_subpage_arena = vmem_create("abd_subpage_cache", NULL, 0,
 		    512, vmem_alloc_impl, vmem_free_impl, abd_arena,
-		    131072, VM_SLEEP | VMC_NO_QCACHE);
+		    PAGESIZE, VM_SLEEP | VMC_NO_QCACHE);
 	}
 
 	VERIFY3P(abd_subpage_arena, !=, NULL);
