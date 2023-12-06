@@ -2873,7 +2873,7 @@ taskq_create_synced(const char *name, int nthreads, pri_t pri,
 		printf("SPL: %s:%d: waiting for tq_nthreads (%d)"
 		    " to be nthreads (%d), (target = %d, pass %d)\n",
 		    __func__, __LINE__,
-		    tq->tq_nthreads, tq->tq_nthreads_target,  nthreads);
+		    tq->tq_nthreads, tq->tq_nthreads_target,  nthreads, i);
 		cv_wait(&tq->tq_wait_cv, &tq->tq_lock);
 	}
 	mutex_exit(&tq->tq_lock);
