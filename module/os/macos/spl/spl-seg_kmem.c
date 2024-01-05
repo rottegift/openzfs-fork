@@ -288,7 +288,22 @@ segkmem_abd_init()
 
 	extern vmem_t *spl_heap_arena;
 
-#define	BIG_SLAB (PAGESIZE * 16)
+	/*
+	 * BIG_SLAB allows for fewer, larger requests from the abd kmem caches
+	 * to the abd vmem arenas, cooling the latter's locks which can get
+	 * very hot when ARC is reduced in size.
+	 */
+#ifndef DEBUG
+#define	BIG_SLAB	(PAGESIZE * 16)
+#else
+	/*
+	 * for DEBUG we have to be sensitive to possible uses of KMF_REDZONE
+	 * in abd_os.c (KMF_BUFTAG and KMF_TOUCH set this too) which can
+	 * overflow VMEM_HASH_INDEX() leading to a panic in
+	 * vmem_hash_delete().
+	 */
+#define	BIG_SLAB	(PAGESIZE * 4)
+#endif
 
 #define	SMALL_RAM_MACHINE (4ULL * 1024ULL * 1024ULL * 1024ULL)
 
