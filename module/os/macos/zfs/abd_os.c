@@ -410,8 +410,14 @@ abd_init(void)
 	int cflags = KMC_NOTOUCH;
 #endif
 
+#ifdef __arm64__
+#define	ABD_ARCH_VEC_ALIGNMENT	(sizeof (void *))
+#else
+#define	ABD_ARCH_VEC_ALIGNMENT	64
+#endif
+
 	abd_chunk_cache = kmem_cache_create("abd_chunk", zfs_abd_chunk_size,
-	    sizeof (void *),
+	    ABD_ARCH_VEC_ALIGNMENT,
 	    NULL, NULL, NULL, NULL, abd_arena, cflags);
 
 	wmsum_init(&abd_sums.abdstat_struct_size, 0);
@@ -455,7 +461,7 @@ abd_init(void)
 		VERIFY3S(index, <, SUBPAGE_CACHE_INDICES);
 
 		abd_subpage_cache[index] =
-		    kmem_cache_create(name, bytes, sizeof (void *),
+		    kmem_cache_create(name, bytes, ABD_ARCH_VEC_ALIGNMENT,
 		    NULL, NULL, NULL, NULL, abd_subpage_arena, cflags);
 
 		VERIFY3P(abd_subpage_cache[index], !=, NULL);
