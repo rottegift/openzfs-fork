@@ -310,7 +310,7 @@ segkmem_abd_init()
 #ifdef __arm64__
 #define	ABD_ARCH_VEC_ALIGNMENT	(sizeof (void *))
 #else
-#define	ABD_ARCH_VEC_ALIGNMENT	(sizeof (void *))
+#define	ABD_ARCH_VEC_ALIGNMENT	64
 #endif
 
 	if (total_memory >= SMALL_RAM_MACHINE) {
@@ -339,13 +339,13 @@ segkmem_abd_init()
 
 	if (total_memory >= SMALL_RAM_MACHINE) {
 		abd_subpage_arena = vmem_create("abd_subpage_cache", NULL, 0,
-		    sizeof (void *),
+		    ABD_ARCH_VEC_ALIGNMENT,
 		    vmem_alloc_impl, vmem_free_impl,
 		    spl_heap_arena,
 		    BIG_SLAB, VM_SLEEP | VMC_NO_QCACHE);
 	} else {
 		abd_subpage_arena = vmem_create("abd_subpage_cache", NULL, 0,
-		    sizeof (void *),
+		    ABD_ARCH_VEC_ALIGNMENT,
 		    vmem_alloc_impl, vmem_free_impl, abd_arena,
 		    PAGESIZE, VM_SLEEP | VMC_NO_QCACHE);
 	}
