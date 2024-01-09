@@ -404,8 +404,9 @@ abd_init(void)
 	 * (the latter tests larger exchanges of memory with the kernel)
 	 */
 
-	int cflags = KMF_BUFTAG | KMF_LITE;
+	// int cflags = KMF_BUFTAG | KMF_LITE;
 	// int cflags = KMC_ARENA_SLAB;
+	int cflags = KMC_NOTOUCH;
 #else
 	int cflags = KMC_NOTOUCH;
 #endif
