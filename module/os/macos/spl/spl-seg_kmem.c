@@ -310,7 +310,7 @@ segkmem_abd_init()
 #ifdef __arm64__
 #define	ABD_ARCH_VEC_ALIGNMENT	(sizeof (void *))
 #else
-#define	ABD_ARCH_VEC_ALIGNMENT	64
+#define	ABD_ARCH_VEC_ALIGNMENT	(sizeof (void *))
 #endif
 
 	if (total_memory >= SMALL_RAM_MACHINE) {
