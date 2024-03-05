@@ -151,6 +151,7 @@ zfs_common_SRCS = \
 	%D%/../../zfs/dbuf.c \
 	%D%/../../zfs/dbuf_stats.c \
 	%D%/../../zfs/ddt.c \
+	%D%/../../zfs/ddt_stats.c \
 	%D%/../../zfs/ddt_zap.c \
 	%D%/../../zfs/dmu.c \
 	%D%/../../zfs/dmu_diff.c \
