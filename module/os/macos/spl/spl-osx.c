@@ -571,7 +571,7 @@ spl_start(kmod_info_t *ki, void *d)
 	spl_kmem_thread_init();
 	spl_kmem_mp_init();
 
-	spl_cpuid_features();
+	spl_processor_init();
 
 	return (KERN_SUCCESS);
 }
