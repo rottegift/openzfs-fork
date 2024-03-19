@@ -29,37 +29,25 @@
 #define	_SPL_PROCESSOR_H
 
 #include <sys/types.h>
+#include <i386/cpuid.h>
 
 extern uint32_t getcpuid(void);
 
 #if defined(__amd64__) || defined(__i386__)
 
-extern int __cpuid_count(unsigned int __level, unsigned int __sublevel,
-	unsigned int __eax, unsigned int __ebx,
-	unsigned int __ecx, unsigned int __edx);
-
-#define	__cpuid_count(level, count, a, b, c, d) \
-	__asm__("xchg{l}\t{%%}ebx, %1\n\t" \
-		"cpuid\n\t" \
-		"xchg{l}\t{%%}ebx, %1\n\t" \
-		: "=a" (a), "=r" (b), "=c" (c), "=d" (d) \
-		: "0" (level), "2" (count))
-
-#define	__cpuid(level, a, b, c, d) \
-	__asm__("xchg{l}\t{%%}ebx, %1\n\t" \
-		"cpuid\n\t" \
-		"xchg{l}\t{%%}ebx, %1\n\t" \
-		: "=a" (a), "=r" (b), "=c" (c), "=d" (d) \
-		: "0" (level))
+#define	__cpuid_count(__level, __count, __eax, __ebx, __ecx, __edx) \
+	__asm("cpuid" : "=a"(__eax), "=b" (__ebx), "=c"(__ecx), "=d"(__edx) \
+		: "0"(__level), "2"(__count))
 
 static inline unsigned int
 __get_cpuid_max(unsigned int __ext, unsigned int *__sig)
 {
-	unsigned int __eax, __ebx, __ecx, __edx;
-	__cpuid(__ext, __eax, __ebx, __ecx, __edx);
+	uint32_t r[4];
+
+	do_cpuid(__ext, r);
 	if (__sig)
-		*__sig = __ebx;
-	return (__eax);
+		*__sig = r[ebx];
+	return (r[eax]);
 }
 
 /* macOS does have do_cpuid() macro */
@@ -69,9 +57,15 @@ __get_cpuid(unsigned int __level,
     unsigned int *__ecx, unsigned int *__edx)
 {
 	unsigned int __ext = __level & 0x80000000;
+	uint32_t r[4];
+
 	if (__get_cpuid_max(__ext, 0) < __level)
 		return (0);
-	__cpuid(__level, *__eax, *__ebx, *__ecx, *__edx);
+	do_cpuid(__ext, r);
+	*__eax = r[eax];
+	*__ebx = r[ebx];
+	*__ecx = r[ecx];
+	*__edx = r[edx];
 	return (1);
 }
 
