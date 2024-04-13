@@ -3905,7 +3905,7 @@ zfs_vnop_getnamedstream(struct vnop_getnamedstream_args *ap)
 			0, VNODE_UPDATE_NAME);
 	}
 
-	kmem_free(prefixed_name, strlen(prefixed_name));
+	kmem_free(prefixed_name, strlen(prefixed_name) + 1);
 	kmem_free(cn.cn_nameptr, cn.cn_namelen);
 
 out:
@@ -3985,7 +3985,7 @@ zfs_vnop_makenamedstream(struct vnop_makenamedstream_args *ap)
 		/* It is interesting we don't need to set name here */
 	}
 
-	kmem_free(prefixed_name, strlen(prefixed_name));
+	kmem_free(prefixed_name, strlen(prefixed_name) + 1);
 
 out:
 	if (xdzp)
