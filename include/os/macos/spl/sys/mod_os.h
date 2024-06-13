@@ -40,6 +40,9 @@ extern "C" {
 #define	__init __attribute__((unused))
 #define	__exit __attribute__((unused))
 
+// Glancing at Linux kernel, module parameters limit:
+#define	LINUX_MAX_MODULE_PARAM_LEN 1024
+
 /*
  * The init/fini functions need to be called, but they are all static
  */

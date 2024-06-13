@@ -29,11 +29,12 @@
 #define	_SPL_PROCESSOR_H
 
 #include <sys/types.h>
-#include <i386/cpuid.h>
 
 extern uint32_t getcpuid(void);
 
 #if defined(__amd64__) || defined(__i386__)
+
+#include <i386/cpuid.h>
 
 #define	__cpuid_count(__level, __count, __eax, __ebx, __ecx, __edx) \
 	__asm("cpuid" : "=a"(__eax), "=b" (__ebx), "=c"(__ecx), "=d"(__edx) \
