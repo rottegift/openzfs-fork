@@ -71,7 +71,7 @@ utsname(void)
  * 1 HZ is 10 milliseconds
  */
 void
-osx_delay(int ticks)
+osx_delay(clock_t ticks)
 {
 	ASSERT3S(ticks, >, 0);
 
