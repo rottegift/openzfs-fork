@@ -56,6 +56,12 @@
 /* Apple needs _ */
 #if defined (__APPLE__)
 #define	gcm_avx_can_use_movbe _gcm_avx_can_use_movbe
+
+// There is a bug in Xcode 16.0
+// let sadd #if version == here?
+#define cfi_restore set ignore,
+#define cfi_def_cfa_register set ignore,
+
 #endif
 
 .extern gcm_avx_can_use_movbe
