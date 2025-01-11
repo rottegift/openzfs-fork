@@ -48,6 +48,11 @@
 extern "C" {
 #endif
 
+/*
+ * uio_extflg: extended flags
+ */
+#define	UIO_DIRECT	0x0001	/* Direct I/O request */
+
 typedef struct iovec iovec_t;
 
 typedef enum uio_seg zfs_uio_seg_t;
