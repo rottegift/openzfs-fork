@@ -92,8 +92,6 @@ static int zfs_dio_enabled = 1;
  */
 static uint64_t zfs_vnops_read_chunk_size = 1024 * 1024;
 
-#ifndef __APPLE__
-
 static ulong_t zfs_fsync_sync_cnt = 4;
 
 #ifndef __APPLE__
