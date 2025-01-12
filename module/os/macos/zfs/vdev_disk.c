@@ -159,8 +159,8 @@ vdev_disk_off_finalize(ldi_handle_t lh, ldi_ev_cookie_t ecookie,
 	 * unsuccessful.
 	 */
 	if (ldi_result != LDI_EV_SUCCESS) {
-		vd->vdev_probe_wanted = B_TRUE;
-		spa_async_request(vd->vdev_spa, SPA_ASYNC_PROBE);
+		vd->vdev_fault_wanted = B_TRUE;
+		spa_async_request(vd->vdev_spa, SPA_ASYNC_FAULT_VDEV);
 	}
 }
 
@@ -629,7 +629,7 @@ vdev_disk_io_start(zio_t *zio)
 	}
 
 	switch (zio->io_type) {
-	case ZIO_TYPE_IOCTL:
+	case ZIO_TYPE_FLUSH:
 
 		if (!vdev_readable(vd)) {
 			zio->io_error = SET_ERROR(ENXIO);
@@ -637,44 +637,34 @@ vdev_disk_io_start(zio_t *zio)
 			return;
 		}
 
-		switch (zio->io_cmd) {
-		case DKIOCFLUSHWRITECACHE:
-
-			if (zfs_nocacheflush)
-				break;
-
-			if (vd->vdev_nowritecache) {
-				zio->io_error = SET_ERROR(ENOTSUP);
-				break;
-			}
-
-			zio->io_vsd = dkc = kmem_alloc(sizeof (*dkc), KM_SLEEP);
-			zio->io_vsd_ops = &vdev_disk_vsd_ops;
-
-			dkc->dkc_callback = vdev_disk_ioctl_done;
-			dkc->dkc_flag = FLUSH_VOLATILE;
-			dkc->dkc_cookie = zio;
-
-			error = ldi_ioctl(dvd->vd_lh, zio->io_cmd,
-			    (uintptr_t)dkc, FKIOCTL, kcred, NULL);
-
-			if (error == 0) {
-				/*
-				 * The ioctl will be done asychronously,
-				 * and will call vdev_disk_ioctl_done()
-				 * upon completion.
-				 */
-				return;
-			}
-
-			zio->io_error = error;
-
+		if (zfs_nocacheflush)
 			break;
 
-		default:
+		if (vd->vdev_nowritecache) {
 			zio->io_error = SET_ERROR(ENOTSUP);
-		} /* io_cmd */
+			break;
+		}
 
+		zio->io_vsd = dkc = kmem_alloc(sizeof (*dkc), KM_SLEEP);
+		zio->io_vsd_ops = &vdev_disk_vsd_ops;
+
+		dkc->dkc_callback = vdev_disk_ioctl_done;
+		dkc->dkc_flag = FLUSH_VOLATILE;
+		dkc->dkc_cookie = zio;
+
+		error = ldi_ioctl(dvd->vd_lh, DKIOCFLUSHWRITECACHE,
+		    (uintptr_t)dkc, FKIOCTL, kcred, NULL);
+
+		if (error == 0) {
+			/*
+			 * The ioctl will be done asychronously,
+			 * and will call vdev_disk_ioctl_done()
+			 * upon completion.
+			 */
+			return;
+		}
+
+		zio->io_error = error;
 		zio_execute(zio);
 		return;
 
