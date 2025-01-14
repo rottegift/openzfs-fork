@@ -5,12 +5,13 @@ paths_ddir = $(sysconfdir)/paths.d/
 dist_paths_d_DATA = \
 	%D%/zfs-path
 
-zfs-path: %D%/zfs-path.in
+SUBSTFILES += $(dist_paths_d_DATA)
 
 CLEANFILES += $(pathsd_DATA)
 CLEANFILES += %D%/zfs-path
+
 INSTALL_DATA_HOOKS += pathsd-data-hook
-pathsd-data-hook: %D%/zfs-path.in
+pathsd-data-hook:
 	-$(SED) -e 's,@bindir\@,$(bindir),g' \
 		-e 's,@runstatedir\@,$(runstatedir),g' \
 		-e 's,@sbindir\@,$(sbindir),g' \
