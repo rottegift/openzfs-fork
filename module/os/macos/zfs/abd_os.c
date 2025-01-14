@@ -12,6 +12,8 @@
 /*
  * Copyright (c) 2014 by Chunwei Chen. All rights reserved.
  * Copyright (c) 2016 by Delphix. All rights reserved.
+ * Copyright (c) 2020 by Jorgen Lundman. All rights reserved.
+ * Copyright (c) 2021 by Sean Doran. All rights reserved.
  */
 
 /*
@@ -106,8 +108,6 @@ struct {
 #else
 #define	ABD_PGSIZE	PAGE_SIZE
 #endif
-
-#define	PAGE_MASK (ABD_PGSIZE - 1ULL)
 
 const static size_t zfs_abd_chunk_size = ABD_PGSIZE;
 
@@ -460,6 +460,48 @@ abd_get_offset_scatter(abd_t *abd, abd_t *sabd, size_t off,
 }
 
 /*
+ * Allocate a scatter ABD structure from user pages.
+ */
+abd_t *
+abd_alloc_from_pages(vm_page_t *pages, unsigned long offset, uint64_t size)
+{
+	VERIFY3U(size, <=, DMU_MAX_ACCESS);
+	ASSERT3U(offset, <, PAGE_SIZE);
+	ASSERT3P(pages, !=, NULL);
+
+	/* Until we do DIRECTIO */
+	VERIFY3U(0, !=, 0);
+	abd_t *abd = NULL;
+#if 0
+	abd_t *abd = abd_alloc_struct(size);
+	abd->abd_flags |= ABD_FLAG_OWNER | ABD_FLAG_FROM_PAGES;
+	abd->abd_size = size;
+
+	if ((offset + size) <= PAGE_SIZE) {
+		/*
+		 * There is only a single page worth of data, so we will just
+		 * use  a linear ABD. We have to make sure to take into account
+		 * the offset though. In all other cases our offset will be 0
+		 * as we are always PAGE_SIZE aligned.
+		 */
+		abd->abd_flags |= ABD_FLAG_LINEAR | ABD_FLAG_LINEAR_PAGE;
+		ABD_LINEAR_BUF(abd) = (char *)zfs_map_page(pages[0],
+		    &abd->abd_u.abd_linear.sf) + offset;
+	} else {
+		ABD_SCATTER(abd).abd_offset = offset;
+		ASSERT0(ABD_SCATTER(abd).abd_offset);
+
+		/*
+		 * Setting the ABD's abd_chunks to point to the user pages.
+		 */
+		for (int i = 0; i < abd_chunkcnt_for_bytes(size); i++)
+			ABD_SCATTER(abd).abd_chunks[i] = pages[i];
+	}
+#endif
+	return (abd);
+}
+
+/*
  * Initialize the abd_iter.
  */
 void
@@ -565,6 +607,103 @@ abd_cache_reap_now(void)
 	 * function is called after several kmem_cache_reap_now(), it
 	 * can be a noop.
 	 */
+}
+
+/*
+ * Borrow a raw buffer from an ABD without copying the contents of the ABD
+ * into the buffer. If the ABD is scattered, this will alloate a raw buffer
+ * whose contents are undefined. To copy over the existing data in the ABD, use
+ * abd_borrow_buf_copy() instead.
+ */
+void *
+abd_borrow_buf(abd_t *abd, size_t n)
+{
+	void *buf;
+	abd_verify(abd);
+	ASSERT3U(abd->abd_size, >=, 0);
+	if (abd_is_linear(abd)) {
+		buf = abd_to_buf(abd);
+	} else {
+		buf = zio_buf_alloc(n);
+	}
+#ifdef ZFS_DEBUG
+	(void) zfs_refcount_add_many(&abd->abd_children, n, buf);
+#endif
+	return (buf);
+}
+
+void *
+abd_borrow_buf_copy(abd_t *abd, size_t n)
+{
+	void *buf = abd_borrow_buf(abd, n);
+	if (!abd_is_linear(abd)) {
+		abd_copy_to_buf(buf, abd, n);
+	}
+	return (buf);
+}
+
+/*
+ * Return a borrowed raw buffer to an ABD. If the ABD is scattered, this will
+ * not change the contents of the ABD. If you want any changes you made to
+ * buf to be copied back to abd, use abd_return_buf_copy() instead. If the
+ * ABD is not constructed from user pages from Direct I/O then an ASSERT
+ * checks to make sure the contents of the buffer have not changed since it was
+ * borrowed. We can not ASSERT the contents of the buffer have not changed if
+ * it is composed of user pages. While Direct I/O write pages are placed under
+ * write protection and can not be changed, this is not the case for Direct I/O
+ * reads. The pages of a Direct I/O read could be manipulated at any time.
+ * Checksum verifications in the ZIO pipeline check for this issue and handle
+ * it by returning an error on checksum verification failure.
+ */
+void
+abd_return_buf(abd_t *abd, void *buf, size_t n)
+{
+	abd_verify(abd);
+	ASSERT3U(abd->abd_size, >=, n);
+#ifdef ZFS_DEBUG
+	(void) zfs_refcount_remove_many(&abd->abd_children, n, buf);
+#endif
+	if (abd_is_from_pages(abd)) {
+		if (!abd_is_linear_page(abd))
+			zio_buf_free(buf, n);
+	} else if (abd_is_linear(abd)) {
+		ASSERT3P(buf, ==, abd_to_buf(abd));
+	} else if (abd_is_gang(abd)) {
+#ifdef ZFS_DEBUG
+		/*
+		 * We have to be careful with gang ABD's that we do not ASSERT
+		 * for any ABD's that contain user pages from Direct I/O. See
+		 * the comment above about Direct I/O read buffers possibly
+		 * being manipulated. In order to handle this, we jsut iterate
+		 * through the gang ABD and only verify ABD's that are not from
+		 * user pages.
+		 */
+		void *cmp_buf = buf;
+
+		for (abd_t *cabd = list_head(&ABD_GANG(abd).abd_gang_chain);
+		    cabd != NULL;
+		    cabd = list_next(&ABD_GANG(abd).abd_gang_chain, cabd)) {
+			if (!abd_is_from_pages(cabd)) {
+				ASSERT0(abd_cmp_buf(cabd, cmp_buf,
+				    cabd->abd_size));
+			}
+			cmp_buf = (char *)cmp_buf + cabd->abd_size;
+		}
+#endif
+		zio_buf_free(buf, n);
+	} else {
+		ASSERT0(abd_cmp_buf(abd, buf, n));
+		zio_buf_free(buf, n);
+	}
+}
+
+void
+abd_return_buf_copy(abd_t *abd, void *buf, size_t n)
+{
+	if (!abd_is_linear(abd)) {
+		abd_copy_from_buf(abd, buf, n);
+	}
+	abd_return_buf(abd, buf, n);
 }
 
 /* Tunable Parameters */

@@ -2706,7 +2706,7 @@ top:
 		err = sa_bulk_update(zp->z_sa_hdl, bulk, count, tx);
 		ASSERT0(err);
 		zfs_log_write(zfsvfs->z_log, tx, TX_WRITE, zp, off, len, 0,
-		    NULL, NULL);
+		    B_FALSE, NULL, NULL);
 	}
 	dmu_tx_commit(tx);
 
@@ -3142,7 +3142,7 @@ zfs_vnop_pageoutv2(struct vnop_pageout_args *ap)
 		    &zp->z_pflags, 8);
 		zfs_tstamp_update_setup(zp, CONTENT_MODIFIED, mtime, ctime);
 		zfs_log_write(zfsvfs->z_log, tx, TX_WRITE, zp, ap->a_f_offset,
-		    a_size, 0, NULL, NULL);
+		    a_size, 0, B_FALSE, NULL, NULL);
 	}
 	dmu_tx_commit(tx);
 
