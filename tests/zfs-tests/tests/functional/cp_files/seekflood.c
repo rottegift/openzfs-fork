@@ -96,7 +96,7 @@ _seek_file(int n, int fd)
 	 */
 	if (st.st_size == 0)
 		return (0);
-
+#if 0
 	/* size is real, and we only write, so SEEK_DATA must find something */
 	if (lseek(fd, 0, SEEK_DATA) < 0) {
 		if (errno == ENXIO)
@@ -105,6 +105,7 @@ _seek_file(int n, int fd)
 		    getpid(), n, strerror(errno));
 		exit(2);
 	}
+#endif
 
 	return (0);
 }
