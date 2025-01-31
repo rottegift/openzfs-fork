@@ -24,7 +24,7 @@
 #define _ASM
 #include <sys/asm_linkage.h>
 
-#if defined(__APPLE__) && (__clang_major__ == 16) && (__clang_minor__ == 0)
+#if defined(__APPLE__) && (__clang_major__ >= 16)
 #pragma message("yes")
 // There is a bug in Xcode 16.0
 // let sadd #if version == here?
