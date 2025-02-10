@@ -349,33 +349,29 @@ openzfs_fini_os(void)
 {
 }
 
-
-
 /*
- * This is an identical copy of zfsdev_minor_alloc() except we check if
- * 'last_minor + 0' is available instead of 'last_minor + 1'. The latter
- * will cycle through minors unnecessarily, when it 'often' is available
- * again. Which gives us unattractive things like;
- * crw-rw-rw-  1 root  wheel   34, 0x0000213A May 31 14:42 /dev/zfs
+ * This is a copy of the static minor_t zfsdev_minor_alloc(void)
+ * in module/zfs/zfs_ioctl.c
  */
+
 static minor_t
 zfsdev_minor_alloc_os(void)
 {
-	static minor_t last_minor = 1;
-	minor_t m;
+        static minor_t last_minor = 0;
+        minor_t m;
 
-	ASSERT(MUTEX_HELD(&zfsdev_state_lock));
+        ASSERT(MUTEX_HELD(&zfsdev_state_lock));
 
-	for (m = last_minor; m != last_minor - 1; m++) {
-		if (m > ZFSDEV_MAX_MINOR)
-			m = 1;
-		if (zfsdev_get_state(m, ZST_ALL) == NULL) {
-			last_minor = m;
-			return (m);
-		}
-	}
+        for (m = last_minor + 1; m != last_minor; m++) {
+                if (m > ZFSDEV_MAX_MINOR)
+                        m = 1;
+                if (zfsdev_get_state(m, ZST_ALL) == NULL) {
+                        last_minor = m;
+                        return (m);
+                }
+        }
 
-	return (0);
+        return (0);
 }
 
 /* Callback to create a unique minor for each open */
