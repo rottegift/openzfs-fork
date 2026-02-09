@@ -98,7 +98,6 @@ extern unsigned int num_ecores;
 
 /*
  * see osfmk/kern/sched.h
- * In macOS, kernel thread priorit
  *
  * In macOS, kernel thread priorities above 63 are reserved
  * to the kernel, with BASEPRI_GRAPHICS set to 76.
