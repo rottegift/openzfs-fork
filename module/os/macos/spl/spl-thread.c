@@ -342,7 +342,7 @@ spl_set_thread_importance(thread_t thread, pri_t pri, const char *name)
 	/*
 	 * set a floor on importance
 	 */
-	else if (policy.importance < importance_floor)
+	if (policy.importance < importance_floor)
 		policy.importance = importance_floor;
 
 	int i = policy.importance;
