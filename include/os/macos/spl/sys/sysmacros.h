@@ -133,7 +133,7 @@ extern unsigned int num_ecores;
 #define	minclsyspri  64 /* MINPRI_RESERVED */
 #define	defclsyspri  70 /* midpoint */
 #define	maxclsyspri  75 /* BASEPRI_GRAPHICS -1 */
-#define wtqclsyspri  72 /* between max and def */
+#define	wtqclsyspri  72 /* between max and def */
 
 /*
  * taskqs for scrubs can be lower-priority, and are better that way for wide
