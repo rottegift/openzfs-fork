@@ -4647,7 +4647,7 @@ spl_maybe_send_large_pressure(uint64_t now, uint64_t minutes, boolean_t full)
 }
 
 static void
-spl_free_thread()
+spl_free_thread(__unused void *arg)
 {
 	callb_cpr_t cpr;
 
