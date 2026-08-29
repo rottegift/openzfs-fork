@@ -851,7 +851,9 @@ dmu_tx_dirty_buf(dmu_tx_t *tx, dmu_buf_impl_t *db)
 		}
 	}
 	DB_DNODE_EXIT(db);
-	panic("dirtying dbuf obj=%llx lvl=%u blkid=%llx but not tx_held\n",
+	cmn_err(CE_WARN,
+	    "%s %d: (panic avoided) dirtying dbuf obj=%llx lvl=%u blkid=%llx but not tx_held\n",
+	    __func__, __LINE__,
 	    (u_longlong_t)db->db.db_object, db->db_level,
 	    (u_longlong_t)db->db_blkid);
 }
