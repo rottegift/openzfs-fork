@@ -16,6 +16,12 @@
 
 #include <sys/zfs_context.h>
 
+#ifdef _KERNEL
+[[maybe_unused]] static int __cxa_atexit(void (f)(void *), void *p, void *d) {
+	return 0;
+}
+#endif
+
 typedef struct zfs_dbgmsg {
 	list_node_t zdm_node;
 	time_t zdm_timestamp;

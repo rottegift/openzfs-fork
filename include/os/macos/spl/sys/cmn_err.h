@@ -27,6 +27,10 @@
 #include <sys/varargs.h>
 #include <sys/atomic.h>
 
+#if !defined(_MACH_H_) && !defined(_KERN_DEBUG_H_) && !defined(panic)
+extern void panic(const char *, ...);
+#endif
+
 #define	CE_CONT		0 /* continuation	*/
 #define	CE_NOTE		1 /* notice		*/
 #define	CE_WARN		2 /* warning		*/
