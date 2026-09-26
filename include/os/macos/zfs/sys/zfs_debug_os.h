@@ -16,4 +16,11 @@
 #define	 SET_ERROR(err) \
 	(__set_error(__FILE__, __func__, __LINE__, err), err)
 
+#ifdef _KERNEL
+#if !defined(_MACH_H_) && !defined(_KERN_DEBUG_H_) && !defined(panic)
+extern void panic(const char *string, ...);
+#endif
+#endif
+
+
 #endif	/* _SYS_ZFS_DEBUG_OS_H */
