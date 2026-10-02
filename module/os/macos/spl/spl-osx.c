@@ -51,6 +51,21 @@ extern uint64_t		segkmem_total_mem_allocated;
 extern int bsd_hostname(char *, size_t, size_t *);
 static char spl_hostname[MAXHOSTNAMELEN];
 
+
+/* 
+ * the use of __attribute((destructor))
+ * with non-apple clang leaves __cxa_atexit() 
+ * unresolved at kext load time.   A static version
+ * for this tiny easily-inlined-by-thecompiler function
+ * is in module/os/macos/zfs_debug.c, but we also
+ * need a linkable version.
+ */ 
+#ifdef _KERNEL
+int __cxa_atexit(void (f)(void *), void *p, void *d) {
+       return 0;
+}
+#endif
+
 utsname_t *
 utsname(void)
 {
