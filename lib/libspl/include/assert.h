@@ -36,12 +36,20 @@
 #define	NORETURN
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Set to non-zero to avoid abort()ing on an assertion failure */
 extern void libspl_set_assert_ok(boolean_t val);
 
 /* printf version of libspl_assert */
 extern void libspl_assertf(const char *file, const char *func, int line,
     const char *format, ...) NORETURN __attribute__((format(printf, 4, 5)));
+
+#ifdef __cplusplus
+}
+#endif
 
 static inline int
 libspl_assert(const char *buf, const char *file, const char *func, int line)
