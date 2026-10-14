@@ -146,6 +146,8 @@ ZetaWatch_bin_SOURCES = \
 	%D%/ZetaWatch/ZetaQueryDialog.mm \
 	%D%/ZetaWatch/ZetaSnapshotMenu.h \
 	%D%/ZetaWatch/ZetaSnapshotMenu.mm \
+	%D%/ZetaWatch/ZetaUpdateChecker.h \
+	%D%/ZetaWatch/ZetaUpdateChecker.mm \
 	%D%/ZetaWatch/ZetaVersionsWindow.h \
 	%D%/ZetaWatch/ZetaVersionsWindow.mm \
 	%D%/ZetaWatch/ZetaWatchDelegate.h \
