@@ -144,6 +144,8 @@ ZetaWatch_bin_SOURCES = \
 	%D%/ZetaWatch/ZetaQueryDialog.mm \
 	%D%/ZetaWatch/ZetaSnapshotMenu.h \
 	%D%/ZetaWatch/ZetaSnapshotMenu.mm \
+	%D%/ZetaWatch/ZetaVersionsWindow.h \
+	%D%/ZetaWatch/ZetaVersionsWindow.mm \
 	%D%/ZetaWatch/ZetaWatchDelegate.h \
 	%D%/ZetaWatch/ZetaWatchDelegate.mm \
 	%D%/ZetaWatch/InvariantDisks/IDDiskArbitrationDispatcher.cpp \

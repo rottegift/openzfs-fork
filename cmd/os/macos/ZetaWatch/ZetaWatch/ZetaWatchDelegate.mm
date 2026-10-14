@@ -18,6 +18,7 @@
 #import "ZetaQueryDialog.h"
 #import "ZetaDictQueryDialog.h"
 #import "ZetaConfirmDialog.h"
+#import "ZetaVersionsWindow.h"
 
 #import "ZFSUtils.hpp"
 
@@ -113,6 +114,31 @@
 	{
 		bool startAtLogin = [object boolForKey:@"startAtLogin"];
 		SMLoginItemSetEnabled(CFSTR("org.openzfsonosx.ZetaLoginItemHelper"), startAtLogin);
+	}
+}
+
+// zetawatch://versions?path=<path> shows the ZFS versions of an item, as
+// does opening a file or folder with ZetaWatch.
+- (void)application:(NSApplication *)application openURLs:(NSArray<NSURL *> *)urls
+{
+	for (NSURL * url in urls)
+	{
+		NSURL * item = nil;
+		if (url.isFileURL)
+		{
+			item = url;
+		}
+		else if ([url.scheme isEqualToString:@"zetawatch"] &&
+			[url.host isEqualToString:@"versions"])
+		{
+			NSURLComponents * c = [NSURLComponents componentsWithURL:url
+				resolvingAgainstBaseURL:NO];
+			for (NSURLQueryItem * q in c.queryItems)
+				if ([q.name isEqualToString:@"path"] && q.value.length)
+					item = [NSURL fileURLWithPath:q.value];
+		}
+		if (item)
+			[ZetaVersionsWindow showVersionsOf:item authorization:self.authorization];
 	}
 }
 
