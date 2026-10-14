@@ -737,13 +737,20 @@ struct ZetaItem
 // Check a descriptor from the app and find its dataset. No authorization
 // is asked for: holding the item open for reading is the proof that the
 // caller may see it. O_EXEC/O_SEARCH descriptors have an access mode of
-// O_RDONLY (0), so they are refused explicitly.
+// O_RDONLY (0), so they are refused explicitly. Older SDKs (Mavericks)
+// have no O_EXEC, and their kernels cannot hand one out either.
+#ifdef O_EXEC
+static const int kNotReadable = O_EXEC | O_EVTONLY;
+#else
+static const int kNotReadable = O_EVTONLY;
+#endif
+
 static NSError * resolveItem(libzfs_handle_t * hdl, int fd, ZetaItem & item)
 {
 	int flags = fcntl(fd, F_GETFL);
 	if (flags == -1 ||
 		((flags & O_ACCMODE) != O_RDONLY && (flags & O_ACCMODE) != O_RDWR) ||
-		(flags & (O_EXEC | O_EVTONLY)) != 0)
+		(flags & kNotReadable) != 0)
 		return versionsError(EBADF, @"The item must be open for reading");
 	struct statfs sfs, msfs;
 	char path[MAXPATHLEN];
