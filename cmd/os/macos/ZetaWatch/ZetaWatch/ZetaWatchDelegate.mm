@@ -68,6 +68,9 @@
 	[[self poolWatcher] checkForChanges];
 	// User Notification Center Delegate
 	[[NSUserNotificationCenter defaultUserNotificationCenter] setDelegate:self];
+	// Finder's Services menu: "ZFS Versions…" (NSServices in Info.plist)
+	[NSApp setServicesProvider:self];
+	NSUpdateDynamicServices();
 	// Login Item
 	[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:@"startAtLogin"
 											   options:NSKeyValueObservingOptionInitial
@@ -140,6 +143,23 @@
 		if (item)
 			[ZetaVersionsWindow showVersionsOf:item authorization:self.authorization];
 	}
+}
+
+// Services menu "ZFS Versions…" on the files and folders selected in Finder.
+- (void)showZFSVersions:(NSPasteboard *)pboard
+			   userData:(NSString *)userData
+				  error:(NSString **)error
+{
+	NSArray<NSURL *> * urls = [pboard readObjectsForClasses:@[[NSURL class]]
+		options:@{NSPasteboardURLReadingFileURLsOnlyKey: @YES}];
+	if (urls.count == 0)
+	{
+		if (error)
+			*error = NSLocalizedString(@"No file or folder was selected", @"Service error");
+		return;
+	}
+	for (NSURL * url in urls)
+		[ZetaVersionsWindow showVersionsOf:url authorization:self.authorization];
 }
 
 - (IBAction)showSettings:(id)sender
