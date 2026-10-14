@@ -269,22 +269,33 @@
 	 }];
 }
 
-- (void)fileVersions:(NSURL *)url
-		   withReply:(void(^)(NSError * error, NSDictionary * versions))reply
+// Open the item here, as the user, so the helper only learns about items
+// the user can read, and pass the descriptor.
+- (void)openItem:(NSURL *)url flags:(int)flags
+		withProxy:(void(^)(id proxy, NSFileHandle * file))task
+		  onError:(void(^)(NSError * error))handleError
 {
-	// Open it here, as the user, so the helper only learns about items
-	// the user can read. Directories open O_RDONLY as well.
-	int fd = open(url.fileSystemRepresentation, O_RDONLY | O_CLOEXEC);
+	int fd = open(url.fileSystemRepresentation, O_RDONLY | O_CLOEXEC | flags);
 	if (fd < 0)
 	{
 		NSError * error = [NSError errorWithDomain:NSPOSIXErrorDomain
 			code:errno userInfo:nil];
-		[self dispatchReply:^(){ reply(error, nil); }];
+		[self dispatchReply:^(){ handleError(error); }];
 		return;
 	}
 	NSFileHandle * file = [[NSFileHandle alloc] initWithFileDescriptor:fd
 		closeOnDealloc:YES];
-	[self executeWhenConnected:^(id proxy)
+	[self executeWhenConnected:^(id proxy) { task(proxy, file); }
+					   onError:^(NSError * error)
+	 {
+		 [self dispatchReply:^(){ handleError(error); }];
+	 }];
+}
+
+- (void)fileVersions:(NSURL *)url
+		   withReply:(void(^)(NSError * error, NSDictionary * versions))reply
+{
+	[self openItem:url flags:0 withProxy:^(id proxy, NSFileHandle * file)
 	 {
 		 [proxy fileVersions:file
 				   withReply:^(NSError * error, NSDictionary * versions)
@@ -292,10 +303,21 @@
 			  [self dispatchReply:^(){ reply(error, versions); }];
 		  }];
 	 }
-					   onError:^(NSError * error)
+		   onError:^(NSError * error) { reply(error, nil); }];
+}
+
+- (void)deletedItems:(NSURL *)url
+		   withReply:(void(^)(NSError * error, NSDictionary * items))reply
+{
+	[self openItem:url flags:O_DIRECTORY withProxy:^(id proxy, NSFileHandle * file)
 	 {
-		 [self dispatchReply:^(){ reply(error, nil); }];
-	 }];
+		 [proxy deletedItems:file
+				   withReply:^(NSError * error, NSDictionary * items)
+		  {
+			  [self dispatchReply:^(){ reply(error, items); }];
+		  }];
+	 }
+		   onError:^(NSError * error) { reply(error, nil); }];
 }
 
 - (void)exportPools:(NSDictionary *)exportData

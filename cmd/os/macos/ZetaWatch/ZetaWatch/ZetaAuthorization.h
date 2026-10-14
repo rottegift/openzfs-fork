@@ -72,6 +72,11 @@
 - (void)fileVersions:(NSURL *)url
     withReply:(void(^)(NSError * error, NSDictionary * versions))reply;
 
+// The same for the names deleted from a folder, see deletedItems: in the
+// helper protocol.
+- (void)deletedItems:(NSURL *)url
+    withReply:(void(^)(NSError * error, NSDictionary * items))reply;
+
 - (void)executeWhenConnected:(void(^)(id proxy))task
     onError:(void(^)(NSError * error))handleError;
 

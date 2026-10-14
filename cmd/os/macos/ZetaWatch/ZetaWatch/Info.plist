@@ -68,6 +68,23 @@
 				<string>public.item</string>
 			</array>
 		</dict>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>ZFS Deleted Items…</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>showZFSDeletedItems</string>
+			<key>NSPortName</key>
+			<string>ZetaWatch</string>
+			<key>NSRequiredContext</key>
+			<dict/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.folder</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSUSerNotificationAlertStyle</key>
 	<string>alert</string>

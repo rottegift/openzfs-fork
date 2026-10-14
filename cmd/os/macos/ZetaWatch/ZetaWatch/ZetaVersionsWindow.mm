@@ -10,8 +10,10 @@
 #import "ZetaVersionsWindow.h"
 
 #import "ZetaAuthorization.h"
+#import "ZetaDeletedItemsWindow.h"
 
 #include <copyfile.h>
+#include <removefile.h>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -37,8 +39,42 @@ static NSMutableDictionary<NSString *, ZetaVersionsWindow *> * openWindows;
 	NSButton * _openButton;
 	NSButton * _copyButton;
 	NSButton * _restoreButton;
+	NSButton * _deletedButton;
 }
 @end
+
+void ZetaCopyItem(NSString * source, NSString * target, bool recursive,
+	bool replace, void (^completion)(int err))
+{
+	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+		int err = 0;
+		struct stat st;
+		if (replace && lstat(target.UTF8String, &st) == 0 &&
+			removefile(target.UTF8String, nullptr, REMOVEFILE_RECURSIVE) != 0)
+			err = errno;
+		copyfile_flags_t flags = COPYFILE_ALL |
+			(recursive ? COPYFILE_RECURSIVE : 0) | (replace ? 0 : COPYFILE_EXCL);
+		if (err == 0 && copyfile(source.UTF8String, target.UTF8String,
+			nullptr, flags) != 0)
+			err = errno;
+		dispatch_async(dispatch_get_main_queue(), ^{ completion(err); });
+	});
+}
+
+NSURL * ZetaFileURL(NSString * path)
+{
+	return [NSURL fileURLWithFileSystemRepresentation:path.UTF8String
+		isDirectory:NO relativeToURL:nil];
+}
+
+NSString * ZetaSnapshotPath(NSString * mountpoint, NSString * snapshot,
+	NSString * path)
+{
+	NSString * snapName = [snapshot substringFromIndex:
+		[snapshot rangeOfString:@"@"].location + 1];
+	return [NSString stringWithFormat:@"%@/.zfs/snapshot/%@%@",
+		[mountpoint isEqualToString:@"/"] ? @"" : mountpoint, snapName, path];
+}
 
 @implementation ZetaVersionsWindow
 
@@ -150,8 +186,15 @@ static NSTableColumn * makeColumn(NSString * ident, NSString * title,
 	_restoreButton = [NSButton buttonWithTitle:NSLocalizedString(@"Restore…", @"Versions button")
 										target:self action:@selector(restoreVersion:)];
 
+	// Folders also offer what was deleted from them.
+	_deletedButton = [NSButton buttonWithTitle:NSLocalizedString(@"Deleted Items…", @"Versions button")
+										target:self action:@selector(showDeletedItems:)];
+	NSNumber * isDir = nil;
+	[_url getResourceValue:&isDir forKey:NSURLIsDirectoryKey error:nil];
+	_deletedButton.hidden = ![isDir boolValue];
+
 	NSStackView * buttons = [NSStackView stackViewWithViews:
-		@[_status, _openButton, _copyButton, _restoreButton]];
+		@[_status, _deletedButton, _openButton, _copyButton, _restoreButton]];
 	buttons.orientation = NSUserInterfaceLayoutOrientationHorizontal;
 	buttons.translatesAutoresizingMaskIntoConstraints = NO;
 
@@ -246,10 +289,7 @@ static bool sameContent(NSDictionary * a, NSDictionary * b)
 	NSString * snapshot = v[@"snapshot"];
 	if (!snapshot)
 		return _livePath;
-	NSString * snapName = [snapshot substringFromIndex:
-		[snapshot rangeOfString:@"@"].location + 1];
-	return [NSString stringWithFormat:@"%@/.zfs/snapshot/%@%@",
-		_mountpoint, snapName, v[@"path"]];
+	return ZetaSnapshotPath(_mountpoint, snapshot, v[@"path"]);
 }
 
 - (void)updateButtons
@@ -342,7 +382,7 @@ static bool sameContent(NSDictionary * a, NSDictionary * b)
 	NSString * path = [self pathForRow:_table.selectedRow];
 	if (!path)
 		return;
-	NSURL * url = [NSURL fileURLWithPath:path];
+	NSURL * url = ZetaFileURL(path);
 	// Folders open in Finder; files in their default app (read only,
 	// as snapshots are read only).
 	if (![[NSWorkspace sharedWorkspace] openURL:url])
@@ -382,29 +422,12 @@ static bool sameContent(NSDictionary * a, NSDictionary * b)
 	}];
 }
 
-// copyfile() with xattrs, resource forks and ACLs, recursively for folders,
-// off the main thread. NSSavePanel already confirmed any overwrite, so an
-// existing target (or folder) is removed first.
+// Shared with the deleted items window. NSSavePanel already confirmed any
+// overwrite, so an existing target (or folder) is removed first.
 - (void)copyFrom:(NSString *)source to:(NSString *)target
 	  completion:(void (^)(int err))completion
 {
-	bool isDir = _isDirectory;
-	dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-		int err = 0;
-		NSError * removeError = nil;
-		if ([[NSFileManager defaultManager] fileExistsAtPath:target] &&
-			![[NSFileManager defaultManager] removeItemAtPath:target error:&removeError])
-		{
-			NSError * posix = removeError.userInfo[NSUnderlyingErrorKey];
-			err = [posix.domain isEqualToString:NSPOSIXErrorDomain] ?
-				(int)posix.code : EEXIST;
-		}
-		copyfile_flags_t flags = COPYFILE_ALL | (isDir ? COPYFILE_RECURSIVE : 0);
-		if (err == 0 && copyfile(source.fileSystemRepresentation,
-			target.fileSystemRepresentation, nullptr, flags) != 0)
-			err = errno;
-		dispatch_async(dispatch_get_main_queue(), ^{ completion(err); });
-	});
+	ZetaCopyItem(source, target, _isDirectory, true, completion);
 }
 
 - (IBAction)restoreVersion:(id)sender
@@ -429,25 +452,44 @@ static bool sameContent(NSDictionary * a, NSDictionary * b)
 	{
 		if (response != NSAlertFirstButtonReturn)
 			return;
-		// Copy next to the file, then rename over it: the current file is
-		// only replaced once the whole old version is in place.
+		// Copy the old version next to the file first, so a failure to
+		// read the snapshot leaves the current file alone. Then copy it
+		// over the current file in place: renaming over it would make a
+		// new object, which has no versions in any snapshot.
 		NSString * temp = [[live stringByDeletingLastPathComponent]
 			stringByAppendingPathComponent:[NSString stringWithFormat:
 				@".%@.zfs-restore-%d", live.lastPathComponent, getpid()]];
 		[self copyFrom:source to:temp completion:^(int err)
 		{
-			if (err == 0 && rename(temp.fileSystemRepresentation,
-				live.fileSystemRepresentation) != 0)
-				err = errno;
-			if (err != 0)
+			if (err == 0)
 			{
-				(void) unlink(temp.fileSystemRepresentation);
-				[self showError:NSLocalizedString(@"The version could not be restored", @"Versions error")
-						 detail:[NSString stringWithUTF8String:strerror(err)]];
+				dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+					int cerr = copyfile(temp.UTF8String, live.UTF8String,
+						nullptr, COPYFILE_ALL) != 0 ? errno : 0;
+					(void) unlink(temp.UTF8String);
+					dispatch_async(dispatch_get_main_queue(), ^{
+						[self restoreFinished:cerr];
+					});
+				});
+				return;
 			}
-			[self reload];
+			(void) unlink(temp.UTF8String);
+			[self restoreFinished:err];
 		}];
 	}];
+}
+
+- (IBAction)showDeletedItems:(id)sender
+{
+	[ZetaDeletedItemsWindow showDeletedItemsIn:_url authorization:_authorization];
+}
+
+- (void)restoreFinished:(int)err
+{
+	if (err != 0)
+		[self showError:NSLocalizedString(@"The version could not be restored", @"Versions error")
+				 detail:[NSString stringWithUTF8String:strerror(err)]];
+	[self reload];
 }
 
 #pragma mark Window

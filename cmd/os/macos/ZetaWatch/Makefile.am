@@ -120,6 +120,8 @@ ZetaWatch_bin_SOURCES = \
 	%D%/ZetaWatch/ZetaBookmarkMenu.mm \
 	%D%/ZetaWatch/ZetaCommanderBase.h \
 	%D%/ZetaWatch/ZetaCommanderBase.mm \
+	%D%/ZetaWatch/ZetaDeletedItemsWindow.h \
+	%D%/ZetaWatch/ZetaDeletedItemsWindow.mm \
 	%D%/ZetaWatch/ZetaConfirmDialog.h \
 	%D%/ZetaWatch/ZetaConfirmDialog.mm \
 	%D%/ZetaWatch/ZetaDictQueryDialog.h \

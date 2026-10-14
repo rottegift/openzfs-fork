@@ -19,6 +19,7 @@
 #import "ZetaDictQueryDialog.h"
 #import "ZetaConfirmDialog.h"
 #import "ZetaVersionsWindow.h"
+#import "ZetaDeletedItemsWindow.h"
 
 #import "ZFSUtils.hpp"
 
@@ -121,26 +122,32 @@
 }
 
 // zetawatch://versions?path=<path> shows the ZFS versions of an item, as
-// does opening a file or folder with ZetaWatch.
+// does opening a file or folder with ZetaWatch; zetawatch://deleted?path=
+// shows what was deleted from a folder.
 - (void)application:(NSApplication *)application openURLs:(NSArray<NSURL *> *)urls
 {
 	for (NSURL * url in urls)
 	{
 		NSURL * item = nil;
+		bool deleted = false;
 		if (url.isFileURL)
 		{
 			item = url;
 		}
 		else if ([url.scheme isEqualToString:@"zetawatch"] &&
-			[url.host isEqualToString:@"versions"])
+			([url.host isEqualToString:@"versions"] ||
+			 [url.host isEqualToString:@"deleted"]))
 		{
+			deleted = [url.host isEqualToString:@"deleted"];
 			NSURLComponents * c = [NSURLComponents componentsWithURL:url
 				resolvingAgainstBaseURL:NO];
 			for (NSURLQueryItem * q in c.queryItems)
 				if ([q.name isEqualToString:@"path"] && q.value.length)
 					item = [NSURL fileURLWithPath:q.value];
 		}
-		if (item)
+		if (item && deleted)
+			[ZetaDeletedItemsWindow showDeletedItemsIn:item authorization:self.authorization];
+		else if (item)
 			[ZetaVersionsWindow showVersionsOf:item authorization:self.authorization];
 	}
 }
@@ -160,6 +167,23 @@
 	}
 	for (NSURL * url in urls)
 		[ZetaVersionsWindow showVersionsOf:url authorization:self.authorization];
+}
+
+// Services menu "ZFS Deleted Items…" on the folders selected in Finder.
+- (void)showZFSDeletedItems:(NSPasteboard *)pboard
+				   userData:(NSString *)userData
+					  error:(NSString **)error
+{
+	NSArray<NSURL *> * urls = [pboard readObjectsForClasses:@[[NSURL class]]
+		options:@{NSPasteboardURLReadingFileURLsOnlyKey: @YES}];
+	if (urls.count == 0)
+	{
+		if (error)
+			*error = NSLocalizedString(@"No folder was selected", @"Service error");
+		return;
+	}
+	for (NSURL * url in urls)
+		[ZetaDeletedItemsWindow showDeletedItemsIn:url authorization:self.authorization];
 }
 
 - (IBAction)showSettings:(id)sender

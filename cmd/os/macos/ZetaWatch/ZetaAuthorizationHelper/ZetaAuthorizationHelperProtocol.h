@@ -83,4 +83,15 @@
 - (void)fileVersions:(NSFileHandle *)file
     withReply:(void(^)(NSError * error, NSDictionary * versions))reply;
 
+/*
+ * Names that no longer exist in a folder but do in snapshots of it,
+ * found with zfs diff without mounting any snapshot. Takes the folder
+ * open for reading, like fileVersions:. The reply holds "dataset",
+ * "mountpoint", "folder", "snapshots" (searched), "truncated" and
+ * "items", sorted by name; each item has "name", "isDirectory" and
+ * "versions" (newest first, as in fileVersions:).
+ */
+- (void)deletedItems:(NSFileHandle *)directory
+    withReply:(void(^)(NSError * error, NSDictionary * items))reply;
+
 @end
