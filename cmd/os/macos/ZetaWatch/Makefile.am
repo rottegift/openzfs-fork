@@ -67,10 +67,18 @@ ZetaAuthorizationHelper_CXXFLAGS = -std=c++17 -Wall -Wextra -Wno-missing-field-i
 ZetaAuthorizationHelper_OBJCFLAGS = -fobjc-arc -Wall -Wextra
 ZetaAuthorizationHelper_OBJCXXFLAGS = -std=c++17 -fobjc-arc -Wall -Wextra -Wno-missing-field-initializers
 ZetaAuthorizationHelper_LDFLAGS = \
-	-Wl,-sectcreate,__TEXT,__info_plist,$(srcdir)/%D%/ZetaAuthorizationHelper/Info.plist \
+	-Wl,-sectcreate,__TEXT,__info_plist,ZetaAuthorizationHelper-Info.plist \
 	-Wl,-sectcreate,__TEXT,__launchd_plist,$(srcdir)/%D%/ZetaAuthorizationHelper/Launchd.plist \
 	-framework Security -framework Foundation
 ZetaAuthorizationHelper_LDADD = libzfs.la
+EXTRA_ZetaAuthorizationHelper_DEPENDENCIES = ZetaAuthorizationHelper-Info.plist
+
+## The app reinstalls the helper (SMJobBless, an admin password prompt)
+## whenever the helper's CFBundleVersion differs from its own, so stamp
+## it with the same version as ZetaWatch.app's Info.plist.
+ZetaAuthorizationHelper-Info.plist: $(srcdir)/%D%/ZetaAuthorizationHelper/Info.plist Makefile
+	$(AM_V_GEN)cp -f $(srcdir)/%D%/ZetaAuthorizationHelper/Info.plist $@
+	$(AM_V_at)/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(ZFS_META_VERSION)" $@
 
 ##
 ## ZetaLoginItemHelper - trampoline app that relaunches the main app at
@@ -237,6 +245,7 @@ zetawatch-install-exec-local: noinst_ZetaWatch.app
 	rsync -aH ZetaWatch.app/ $(DESTDIR)/Applications/ZetaWatch.app/
 
 CLEANFILES += \
+	ZetaAuthorizationHelper-Info.plist \
 	ZetaWatch.app/Contents/Info.plist \
 	ZetaWatch.app/Contents/MacOS/ZetaWatch \
 	ZetaWatch.app/Contents/Library/LaunchServices/org.openzfsonosx.ZetaAuthorizationHelper \
