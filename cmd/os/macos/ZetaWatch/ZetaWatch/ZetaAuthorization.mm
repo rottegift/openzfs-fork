@@ -16,6 +16,7 @@
 #include <ServiceManagement/ServiceManagement.h>
 
 #include <dispatch/dispatch.h>
+#include <fcntl.h>
 
 @interface ZetaAuthorization ()
 {
@@ -260,6 +261,35 @@
 					  withReply:^(NSError * error, NSArray * importablePools)
 		  {
 			  [self dispatchReply:^(){ reply(error, importablePools); }];
+		  }];
+	 }
+					   onError:^(NSError * error)
+	 {
+		 [self dispatchReply:^(){ reply(error, nil); }];
+	 }];
+}
+
+- (void)fileVersions:(NSURL *)url
+		   withReply:(void(^)(NSError * error, NSDictionary * versions))reply
+{
+	// Open it here, as the user, so the helper only learns about items
+	// the user can read. Directories open O_RDONLY as well.
+	int fd = open(url.fileSystemRepresentation, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+	{
+		NSError * error = [NSError errorWithDomain:NSPOSIXErrorDomain
+			code:errno userInfo:nil];
+		[self dispatchReply:^(){ reply(error, nil); }];
+		return;
+	}
+	NSFileHandle * file = [[NSFileHandle alloc] initWithFileDescriptor:fd
+		closeOnDealloc:YES];
+	[self executeWhenConnected:^(id proxy)
+	 {
+		 [proxy fileVersions:file
+				   withReply:^(NSError * error, NSDictionary * versions)
+		  {
+			  [self dispatchReply:^(){ reply(error, versions); }];
 		  }];
 	 }
 					   onError:^(NSError * error)

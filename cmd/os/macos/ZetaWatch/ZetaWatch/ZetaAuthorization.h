@@ -67,6 +67,11 @@
 - (void)scrubPool:(NSDictionary *)poolData
     withReply:(void(^)(NSError * error))reply;
 
+// Opens the item as the current user and asks the helper for its
+// snapshot versions; see the helper protocol for the reply's contents.
+- (void)fileVersions:(NSURL *)url
+    withReply:(void(^)(NSError * error, NSDictionary * versions))reply;
+
 - (void)executeWhenConnected:(void(^)(id proxy))task
     onError:(void(^)(NSError * error))handleError;
 

@@ -73,4 +73,14 @@
     authorization:(NSData *)authData
     withReply:(void(^)(NSError * error))reply;
 
+/*
+ * The snapshot versions of a file or directory. Takes no authorization:
+ * the caller proves it may read the item by passing it already open
+ * for reading. The reply holds "dataset", "mountpoint", "live" and
+ * "versions" (newest first); each version has "snapshot", "path"
+ * (within the snapshot), "size", "mtime", "mode" and "gen".
+ */
+- (void)fileVersions:(NSFileHandle *)file
+    withReply:(void(^)(NSError * error, NSDictionary * versions))reply;
+
 @end

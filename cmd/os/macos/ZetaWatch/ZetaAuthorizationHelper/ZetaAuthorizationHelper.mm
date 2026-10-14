@@ -14,6 +14,15 @@
 #include "ZFSUtils.hpp"
 #include "ZetaCPPUtils.hpp"
 
+extern "C"
+{
+#include <libzfs.h>
+}
+
+#include <sys/mount.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 @interface ZetaAuthorizationHelper () <NSXPCListenerDelegate, ZetaAuthorizationHelperProtocol>
 {
 	bool shouldRun;
@@ -665,6 +674,165 @@ void processWithExceptionForwarding(NSData * authData, SEL command,
 		}
 		reply(nullptr);
 	});
+}
+
+// Mirrors INO_XNUTOZFS() in include/os/macos/zfs/sys/zfs_context_os.h: the
+// dataset root is reported as inode 2, and objects 0-15 are moved to the top.
+static const uint64_t kInoRoot = 2;
+static const uint64_t kInoMap = static_cast<uint64_t>(-16);
+
+static NSError * versionsError(int code, NSString * what)
+{
+	return [NSError errorWithDomain:NSPOSIXErrorDomain code:code
+		userInfo:@{NSLocalizedDescriptionKey: what}];
+}
+
+static NSDictionary * versionDict(zfs_obj_version_t const & v,
+	char const * path, char const * snapshot)
+{
+	NSMutableDictionary * d = [@{
+		@"path": [NSString stringWithUTF8String:path],
+		@"size": @(v.zov_size),
+		@"mtime": [NSDate dateWithTimeIntervalSince1970:
+			v.zov_mtime[0] + v.zov_mtime[1] / 1e9],
+		@"mode": @(v.zov_mode),
+		@"gen": @(v.zov_gen),
+	} mutableCopy];
+	if (snapshot)
+		d[@"snapshot"] = [NSString stringWithUTF8String:snapshot];
+	return d;
+}
+
+static int collectSnapshotName(zfs_handle_t * zhp, void * arg)
+{
+	auto names = static_cast<std::vector<std::string> *>(arg);
+	names->emplace_back(zfs_get_name(zhp));
+	zfs_close(zhp);
+	return 0;
+}
+
+- (void)fileVersions:(NSFileHandle *)file
+		   withReply:(void (^)(NSError *, NSDictionary *))reply
+{
+	// No authorization check: holding the item open for reading is the
+	// proof that the caller may see it. O_EXEC/O_SEARCH descriptors have
+	// an access mode of O_RDONLY (0), so they are refused explicitly.
+	int fd = file.fileDescriptor;
+	int flags = fcntl(fd, F_GETFL);
+	if (flags == -1 ||
+		((flags & O_ACCMODE) != O_RDONLY && (flags & O_ACCMODE) != O_RDWR) ||
+		(flags & (O_EXEC | O_EVTONLY)) != 0)
+	{
+		reply(versionsError(EBADF, @"The item must be open for reading"), nullptr);
+		return;
+	}
+	struct stat st;
+	struct statfs sfs, msfs;
+	if (fstat(fd, &st) != 0 || fstatfs(fd, &sfs) != 0)
+	{
+		reply(versionsError(errno, @"Cannot stat the item"), nullptr);
+		return;
+	}
+	uint64_t obj = st.st_ino;
+	if (obj == kInoRoot)
+	{
+		reply(versionsError(ENOTSUP,
+			@"Versions of a file system's top folder are not supported yet"), nullptr);
+		return;
+	}
+	if (obj >= kInoMap)
+		obj -= kInoMap;
+
+	// The mount point must still be the mount the descriptor lives on.
+	if (statfs(sfs.f_mntonname, &msfs) != 0 ||
+		memcmp(&msfs.f_fsid, &sfs.f_fsid, sizeof (sfs.f_fsid)) != 0)
+	{
+		reply(versionsError(ENOENT, @"The item's file system has moved"), nullptr);
+		return;
+	}
+
+	try
+	{
+		zfs::LibZFSHandle zfs;
+		libzfs_handle_t * hdl = zfs.handle();
+		// The dataset (or snapshot) the descriptor is on: its version of
+		// the object is the reference the others must match (same gen).
+		// Datasets and snapshots mount with their name as the device; a
+		// pool's root dataset may mount as /dev/diskN, which libzfs maps
+		// back to the dataset (zfs_path_to_zhandle() only opens
+		// filesystems, so it cannot be used for snapshot mounts).
+		std::string reference;
+		if (sfs.f_mntfromname[0] != '/' &&
+			strcmp(sfs.f_fstypename, "zfs") == 0 &&
+			zfs_dataset_exists(hdl, sfs.f_mntfromname,
+				static_cast<zfs_type_t>(ZFS_TYPE_FILESYSTEM | ZFS_TYPE_SNAPSHOT)))
+		{
+			reference = sfs.f_mntfromname;
+		}
+		else if (zfs_handle_t * mzhp = zfs_path_to_zhandle(hdl,
+			sfs.f_mntonname, ZFS_TYPE_FILESYSTEM))
+		{
+			reference = zfs_get_name(mzhp);
+			zfs_close(mzhp);
+		}
+		else
+		{
+			reply(versionsError(EINVAL, @"The item is not on a ZFS file system"), nullptr);
+			return;
+		}
+		std::string dataset = reference.substr(0, reference.find('@'));
+		zfs_handle_t * zhp = zfs_open(hdl, dataset.c_str(), ZFS_TYPE_FILESYSTEM);
+		if (zhp == nullptr)
+		{
+			reply(versionsError(ENOENT, @"Cannot open the file system"), nullptr);
+			return;
+		}
+
+		char path[MAXPATHLEN];
+		zfs_obj_version_t ref, v;
+		int err = zfs_get_obj_version(hdl, reference.c_str(), obj, &ref,
+			path, sizeof (path));
+		if (err != 0)
+		{
+			zfs_close(zhp);
+			reply(versionsError(err, @"Cannot look up the item"), nullptr);
+			return;
+		}
+
+		NSMutableDictionary * result = [NSMutableDictionary dictionary];
+		result[@"dataset"] = [NSString stringWithUTF8String:dataset.c_str()];
+		char * where = nullptr;
+		if (zfs_is_mounted(zhp, &where) && where != nullptr)
+			result[@"mountpoint"] = [NSString stringWithUTF8String:where];
+		free(where);
+
+		if (zfs_get_obj_version(hdl, dataset.c_str(), obj, &v, path,
+			sizeof (path)) == 0 && v.zov_gen == ref.zov_gen)
+			result[@"live"] = versionDict(v, path, nullptr);
+
+		std::vector<std::string> snapshots;
+		(void) zfs_iter_snapshots_sorted_v2(zhp, 0, collectSnapshotName,
+			&snapshots, 0, 0);
+		zfs_close(zhp);
+
+		NSMutableArray * versions = [NSMutableArray array];
+		for (auto s = snapshots.rbegin(); s != snapshots.rend(); ++s)
+		{
+			// ENOENT: the object did not exist yet, or no longer.
+			// A different gen: the object number was reused by
+			// another file.
+			if (zfs_get_obj_version(hdl, s->c_str(), obj, &v, path,
+				sizeof (path)) != 0 || v.zov_gen != ref.zov_gen)
+				continue;
+			[versions addObject:versionDict(v, path, s->c_str())];
+		}
+		result[@"versions"] = versions;
+		reply(nullptr, result);
+	}
+	catch (std::exception const & e)
+	{
+		reply([NSError errorWithDomain:@"ZFSException" code:-1 userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithUTF8String:e.what()]}], nullptr);
+	}
 }
 
 @end
