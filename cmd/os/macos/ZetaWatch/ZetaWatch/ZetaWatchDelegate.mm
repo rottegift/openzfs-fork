@@ -20,6 +20,7 @@
 #import "ZetaConfirmDialog.h"
 #import "ZetaVersionsWindow.h"
 #import "ZetaDeletedItemsWindow.h"
+#import "ZetaUpdateChecker.h"
 
 #import "ZFSUtils.hpp"
 
@@ -41,6 +42,7 @@
 
 @property (strong) ZetaDictQueryDialog * zetaNewFSDialog;
 @property (strong) ZetaDictQueryDialog * zetaNewVolDialog;
+@property (strong) ZetaUpdateChecker * updateChecker;
 
 @end
 
@@ -72,6 +74,14 @@
 	// Finder's Services menu: "ZFS Versions…" (NSServices in Info.plist)
 	[NSApp setServicesProvider:self];
 	NSUpdateDynamicServices();
+	// New version check, with its settings next to "More Settings..."
+	NSMenu * settingsMenu = nil;
+	for (NSMenuItem * item in _zetaMenu.itemArray)
+		for (NSMenuItem * sub in item.submenu.itemArray)
+			if (sub.action == @selector(showSettings:))
+				settingsMenu = item.submenu;
+	_updateChecker = [[ZetaUpdateChecker alloc] init];
+	[_updateChecker startWithMenu:_zetaMenu settingsMenu:settingsMenu];
 	// Login Item
 	[[NSUserDefaults standardUserDefaults] addObserver:self forKeyPath:@"startAtLogin"
 											   options:NSKeyValueObservingOptionInitial
@@ -88,6 +98,8 @@
 		@"useKeychain": @NO,
 		@"startAtLogin": @YES,
 		@"keepAwakeDuringScrub": @YES,
+		@"checkForUpdates": @YES,
+		@"checkForPrereleases": @NO,
 		@"defaultAltroot": @"/Volumes",
 		@"useAltroot": @NO,
 		@"searchPathOverride": @[
@@ -100,6 +112,7 @@
 - (void)applicationWillTerminate:(NSNotification *)aNotification
 {
 	[[NSUserDefaults standardUserDefaults] removeObserver:self forKeyPath:@"startAtLogin"];
+	[_updateChecker stop];
 	[self.authorization stopHelper];
 }
 
@@ -107,6 +120,15 @@
 	 shouldPresentNotification:(NSUserNotification *)notification
 {
 	return YES;
+}
+
+// The update notification carries its release page.
+- (void)userNotificationCenter:(NSUserNotificationCenter *)center
+	   didActivateNotification:(NSUserNotification *)notification
+{
+	NSString * url = notification.userInfo[@"url"];
+	if ([url isKindOfClass:[NSString class]])
+		[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath
