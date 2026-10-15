@@ -21,6 +21,7 @@
 #import "ZetaVersionsWindow.h"
 #import "ZetaDeletedItemsWindow.h"
 #import "ZetaUpdateChecker.h"
+#import "ZetaUserNotification.h"
 
 #import "ZFSUtils.hpp"
 
@@ -69,8 +70,8 @@
 	_zetaMainMenu.zetaNewVolDialog = _zetaNewVolDialog;
 	// Watcher
 	[[self poolWatcher] checkForChanges];
-	// User Notification Center Delegate
-	[[NSUserNotificationCenter defaultUserNotificationCenter] setDelegate:self];
+	// Notifications, asking for permission the first time
+	ZetaSetupNotifications(self);
 	// Finder's Services menu: "ZFS Versions…" (NSServices in Info.plist)
 	[NSApp setServicesProvider:self];
 	NSUpdateDynamicServices();
@@ -116,19 +117,23 @@
 	[self.authorization stopHelper];
 }
 
-- (BOOL)userNotificationCenter:(NSUserNotificationCenter *)center
-	 shouldPresentNotification:(NSUserNotification *)notification
+// Show notifications while ZetaWatch is the active app too.
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+	   willPresentNotification:(UNNotification *)notification
+		 withCompletionHandler:(void (^)(UNNotificationPresentationOptions))completionHandler
 {
-	return YES;
+	completionHandler(UNNotificationPresentationOptionBanner |
+		UNNotificationPresentationOptionList);
 }
 
-// The update notification carries its release page.
-- (void)userNotificationCenter:(NSUserNotificationCenter *)center
-	   didActivateNotification:(NSUserNotification *)notification
+// Clicking a notification that carries a URL, such as a new release, opens it.
+- (void)userNotificationCenter:(UNUserNotificationCenter *)center
+didReceiveNotificationResponse:(UNNotificationResponse *)response
+		 withCompletionHandler:(void (^)(void))completionHandler
 {
-	NSString * url = notification.userInfo[@"url"];
-	if ([url isKindOfClass:[NSString class]])
-		[[NSWorkspace sharedWorkspace] openURL:[NSURL URLWithString:url]];
+	if ([response.actionIdentifier isEqualToString:UNNotificationDefaultActionIdentifier])
+		ZetaOpenNotificationURL(response.notification);
+	completionHandler();
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath
