@@ -9,11 +9,13 @@
 
 /* CSTYLED */
 #import <Cocoa/Cocoa.h>
+/* CSTYLED */
 #import <UserNotifications/UserNotifications.h>
 
 // Asks once for permission to notify, and makes delegate the center's
 // delegate, so notifications show while ZetaWatch is active and clicking
 // one opens its URL.
+/* CSTYLED */
 void ZetaSetupNotifications(id<UNUserNotificationCenterDelegate> delegate);
 
 // Shows a notification. Clicking it opens url, when given. With a lifetime
