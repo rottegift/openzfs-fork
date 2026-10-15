@@ -8,6 +8,7 @@
 //
 
 #import "ZetaUpdateChecker.h"
+#import "ZetaUserNotification.h"
 
 #include <sys/sysctl.h>
 
@@ -148,14 +149,16 @@ static NSString * packageSuffix()
 		[settingsMenu insertItem:[NSMenuItem separatorItem] atIndex:idx];
 	}
 
+	// The daily timer may run up to an hour late; the first check should not.
 	_timer = [NSTimer scheduledTimerWithTimeInterval:kCheckInterval target:self
 		selector:@selector(timerFired:) userInfo:nil repeats:YES];
 	_timer.tolerance = 60 * 60;
-	_timer.fireDate = [NSDate dateWithTimeIntervalSinceNow:kFirstCheck];
+	[self performSelector:@selector(check) withObject:nil afterDelay:kFirstCheck];
 }
 
 - (void)stop
 {
+	[NSObject cancelPreviousPerformRequestsWithTarget:self];
 	[_timer invalidate];
 	_timer = nil;
 }
@@ -216,23 +219,21 @@ static NSString * packageSuffix()
 		version];
 
 	// Notify once per version; the menu item stays until it is installed.
+	// It only counts once it was shown, so a notification dropped before
+	// the user allowed them is tried again on the next check.
 	auto defaults = [NSUserDefaults standardUserDefaults];
 	if ([[defaults stringForKey:kNotifiedKey] isEqualToString:version])
 		return;
-	[defaults setObject:version forKey:kNotifiedKey];
-	NSUserNotification * notification = [[NSUserNotification alloc] init];
-	notification.title = NSLocalizedString(@"OpenZFS Update Available",
-		@"Update notification title");
-	notification.informativeText = [NSString stringWithFormat:
-		NSLocalizedString(@"OpenZFS on OS X %@ is available. You have %@.",
-			@"Update notification text"),
-		version, installedVersion() ?: @"?"];
-	notification.hasActionButton = YES;
-	notification.actionButtonTitle = NSLocalizedString(@"Download",
-		@"Update notification button");
-	notification.userInfo = @{@"url": url.absoluteString};
-	[[NSUserNotificationCenter defaultUserNotificationCenter]
-		deliverNotification:notification];
+	ZetaNotify(NSLocalizedString(@"OpenZFS Update Available",
+			@"Update notification title"),
+		[NSString stringWithFormat:
+			NSLocalizedString(@"OpenZFS on OS X %@ is available. You have %@.",
+				@"Update notification text"),
+			version, installedVersion() ?: @"?"],
+		url, 0, ^(BOOL shown) {
+			if (shown)
+				[defaults setObject:version forKey:kNotifiedKey];
+		});
 }
 
 - (void)check

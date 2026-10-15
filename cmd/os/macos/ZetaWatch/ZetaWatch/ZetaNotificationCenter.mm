@@ -9,6 +9,7 @@
 #import "ZetaNotificationCenter.h"
 
 #import "ZetaPoolWatcher.h"
+#import "ZetaUserNotification.h"
 
 @implementation ZetaNotification
 {
@@ -68,22 +69,16 @@
 
 - (void)errorDetectedInPool:(std::string const &)pool
 {
-	NSUserNotification * notification = [[NSUserNotification alloc] init];
-	notification.title = NSLocalizedString(@"ZFS Pool Error", @"ZFS Pool Error Title");
 	NSString * errorFormat = NSLocalizedString(@"ZFS detected an error on pool %s.", @"ZFS Pool Error Format");
-	notification.informativeText = [NSString stringWithFormat:errorFormat, pool.c_str()];
-	notification.hasActionButton = NO;
-	[[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
+	ZetaNotify(NSLocalizedString(@"ZFS Pool Error", @"ZFS Pool Error Title"),
+		[NSString stringWithFormat:errorFormat, pool.c_str()], nil, 0);
 }
 
 - (void)errorDetected:(std::string const &)error
 {
-	NSUserNotification * notification = [[NSUserNotification alloc] init];
-	notification.title = NSLocalizedString(@"ZFS Error", @"ZFS Error Title");
 	NSString * errorFormat = NSLocalizedString(@"ZFS encountered an error: %s.", @"ZFS Error Format");
-	notification.informativeText = [NSString stringWithFormat:errorFormat, error.c_str()];
-	notification.hasActionButton = NO;
-	[[NSUserNotificationCenter defaultUserNotificationCenter] deliverNotification:notification];
+	ZetaNotify(NSLocalizedString(@"ZFS Error", @"ZFS Error Title"),
+		[NSString stringWithFormat:errorFormat, error.c_str()], nil, 0);
 }
 
 @synthesize inProgressActions;

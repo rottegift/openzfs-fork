@@ -148,6 +148,8 @@ ZetaWatch_bin_SOURCES = \
 	%D%/ZetaWatch/ZetaSnapshotMenu.mm \
 	%D%/ZetaWatch/ZetaUpdateChecker.h \
 	%D%/ZetaWatch/ZetaUpdateChecker.mm \
+	%D%/ZetaWatch/ZetaUserNotification.h \
+	%D%/ZetaWatch/ZetaUserNotification.mm \
 	%D%/ZetaWatch/ZetaVersionsWindow.h \
 	%D%/ZetaWatch/ZetaVersionsWindow.mm \
 	%D%/ZetaWatch/ZetaWatchDelegate.h \
@@ -243,6 +245,11 @@ noinst_ZetaWatch.app: ZetaWatch_bin ZetaAuthorizationHelper noinst_ZetaLoginItem
 		ZetaWatch.app/Contents/Info.plist
 	$(AM_V_at)/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(ZFS_META_VERSION)" \
 		ZetaWatch.app/Contents/Info.plist
+	@: # Seal the bundle ad-hoc. A merely linker-signed app is refused
+	@: # notifications; pkg_macos.sh re-signs it with the real identity.
+	$(AM_V_at)codesign -fs - --deep \
+		--entitlements $(srcdir)/%D%/ZetaWatch/ZetaWatch.entitlements \
+		ZetaWatch.app 2>/dev/null || true
 
 INSTALL_DATA_HOOKS += zetawatch-install-exec-local
 zetawatch-install-exec-local: noinst_ZetaWatch.app

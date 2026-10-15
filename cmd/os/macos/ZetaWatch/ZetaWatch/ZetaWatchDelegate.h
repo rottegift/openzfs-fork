@@ -13,13 +13,10 @@
 
 /* CSTYLED */
 #import <Cocoa/Cocoa.h>
+#import <UserNotifications/UserNotifications.h>
 
 @interface ZetaWatchDelegate : NSObject
 /* CSTYLED */
-	<NSApplicationDelegate, NSUserNotificationCenterDelegate>
-
-// NSUserNotificationCenterDelegate
-- (BOOL)userNotificationCenter:(NSUserNotificationCenter *)center
-    shouldPresentNotification:(NSUserNotification *)notification;
+	<NSApplicationDelegate, UNUserNotificationCenterDelegate>
 
 @end
