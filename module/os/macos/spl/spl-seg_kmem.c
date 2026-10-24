@@ -257,7 +257,7 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 #endif
 
 /*
- * The smallest exchange with IODMallocData must be bigger
+ * The smallest exchange with IOMallocData must be bigger
  * than KHEAP_MAX_SIZE (32k on Apple Silicon, 16k on X86_64)
  * in order to avoid being channeled into a zone:
  *
