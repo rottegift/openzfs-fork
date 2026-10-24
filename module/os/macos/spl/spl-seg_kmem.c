@@ -277,6 +277,7 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 #define	ABD_DATA_MIN_IMPORT	(2 * 32 * 1024)
 
 extern vmem_t *spl_heap_arena;
+extern vmem_t *spl_default_arena_parent;
 
 static void *
 abd_data_import(vmem_t *vmp, size_t size, int vmflag)
@@ -328,7 +329,7 @@ segkmem_abd_init()
 		    sizeof (void *),
 #if defined(SPL_HAS_IOMALLOCDATA)
 		    abd_data_import, abd_data_release,
-		    NULL,
+		    spl_default_arena_parent,
 #else
 		    vmem_alloc_impl, vmem_free_impl,
 		    spl_heap_arena,
@@ -340,7 +341,7 @@ segkmem_abd_init()
 		    sizeof (void *),
 #if defined(SPL_HAS_IOMALLOCDATA)
 		    abd_data_import, abd_data_release,
-		    NULL,
+		    spl_default_arena_parent,
 #else
 		    vmem_alloc_impl, vmem_free_impl,
 		    spl_heap_arena,
