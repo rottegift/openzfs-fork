@@ -277,7 +277,6 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 #define	ABD_DATA_MIN_IMPORT	(2 * 32 * 1024)
 
 extern vmem_t *spl_heap_arena;
-extern vmem_t *spl_default_arena_parent;
 
 static void *
 abd_data_import(vmem_t *vmp, size_t size, int vmflag)
@@ -329,7 +328,7 @@ segkmem_abd_init()
 		    sizeof (void *),
 #if defined(SPL_HAS_IOMALLOCDATA)
 		    abd_data_import, abd_data_release,
-		    spl_default_arena_parent,
+		    spl_heap_arena,
 #else
 		    vmem_alloc_impl, vmem_free_impl,
 		    spl_heap_arena,
@@ -341,13 +340,22 @@ segkmem_abd_init()
 		    sizeof (void *),
 #if defined(SPL_HAS_IOMALLOCDATA)
 		    abd_data_import, abd_data_release,
-		    spl_default_arena_parent,
+		    spl_heap_arena,
 #else
 		    vmem_alloc_impl, vmem_free_impl,
 		    spl_heap_arena,
 #endif
 		    MAX(PAGESIZE, ABD_DATA_MIN_IMPORT),
 		    VM_SLEEP | VMC_NO_QCACHE);
+
+#if defined(SPL_HAS_IOMALLOCDATA)
+		VERIFY3P(abd_arena, !=, NULL);
+		/*
+		 * make self self's parent, as with the bucket arenas'
+		 * b->vm_source = b;
+		 */
+		abd_arena->vm_source = abd_arena;
+#endif
 	}
 
 	VERIFY3P(abd_arena, !=, NULL);
