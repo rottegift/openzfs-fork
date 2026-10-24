@@ -333,7 +333,7 @@ segkmem_abd_init()
 		    vmem_alloc_impl, vmem_free_impl,
 		    spl_heap_arena,
 #endif
-		    IOMax(BIG_SLAB, ABD_DATA_MIN_IMPORT),
+		    MAX(BIG_SLAB, ABD_DATA_MIN_IMPORT),
 		    VM_SLEEP | VMC_NO_QCACHE);
 	} else {
 		abd_arena = vmem_create("abd_cache", NULL, 0,
@@ -345,7 +345,7 @@ segkmem_abd_init()
 		    vmem_alloc_impl, vmem_free_impl,
 		    spl_heap_arena,
 #endif
-		    IOMax(PAGESIZE, ABD_DATA_MIN_IMPORT),
+		    MAX(PAGESIZE, ABD_DATA_MIN_IMPORT),
 		    VM_SLEEP | VMC_NO_QCACHE);
 	}
 
