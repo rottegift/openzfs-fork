@@ -320,7 +320,11 @@ segkmem_abd_init()
 
 	extern vmem_t *spl_heap_arena;
 
+#if defined(__arm64__)
+#define	BIG_SLAB (PAGESIZE * 4)
+#else
 #define	BIG_SLAB (PAGESIZE * 16)
+#endif
 
 #define	SMALL_RAM_MACHINE (4ULL * 1024ULL * 1024ULL * 1024ULL)
 
