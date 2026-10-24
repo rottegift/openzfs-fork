@@ -251,8 +251,8 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 // smd: we nevertheless plumb in an arena with heap as parent, so that
 // we can track stats and maintain the VM_ / qc settings differently
 
-#if defined(__MAC_OS_X_VERSION_MAX_ALLOWED) && \
-	(__MAC_OS_X_VERSION_MAX_ALLOWED >= 150000)
+#if defined(MAC_OS_X_VERSION_MIN_REQUIRED) &&		\
+	(MAC_OS_X_VERSION_MIN_REQUIRED >= 150000)
 #define	SPL_HAS_IOMALLOCDATA	1
 #endif
 
@@ -274,7 +274,8 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
  * VMEM allocations smaller than ABD_DATA_MIN_IMPORT will use parent
  * spl_vmem_heap.
  */
-#define	ABD_DATA_MIN_IMPORT	(2 * 32 * 1024)
+#define	ABD_DATA_ZONE_MAX	(32 * 1024)	/* >= KHEAP_MAX_SIZE */
+#define	ABD_DATA_MIN_IMPORT	(2 * 32 * 1024)	/* bigger => fewer kallocs */
 
 extern vmem_t *spl_heap_arena;
 
@@ -282,7 +283,7 @@ static void *
 abd_data_import(vmem_t *vmp, size_t size, int vmflag)
 {
 #if defined(SPL_HAS_IOMALLOCDATA)
-	if (size > ABD_DATA_MIN_IMPORT) { /* will not be backed by xnu zone */
+	if (size > ABD_DATA_ZONE_MAX) { /* will not be backed by xnu zone */
 		/* in modern macOS should go to DATA_PRIVATE */
 		void *p = IOMallocData(size);
 		if (p != NULL)
@@ -297,7 +298,7 @@ static void
 abd_data_release(vmem_t *vmp, const void *p, size_t size)
 {
 #if defined(SPL_HAS_IOMALLOCDATA)
-	if (size > ABD_DATA_MIN_IMPORT) { /* return to sender */
+	if (size > ABD_DATA_ZONE_MAX) { /* return to sender */
 		IOFreeData((void *)p, size);
 		atomic_sub_64(&segkmem_total_mem_allocated, size);
 		return;
@@ -335,6 +336,14 @@ segkmem_abd_init()
 #endif
 		    MAX(BIG_SLAB, ABD_DATA_MIN_IMPORT),
 		    VM_SLEEP | VMC_NO_QCACHE);
+#if defined(SPL_HAS_IOMALLOCDATA)
+		VERIFY3P(abd_arena, !=, NULL);
+		/*
+		 * make self self's parent, as with the bucket arenas'
+		 * b->vm_source = b;
+		 */
+		abd_arena->vm_source = abd_arena;
+#endif
 	} else {
 		abd_arena = vmem_create("abd_cache", NULL, 0,
 		    sizeof (void *),

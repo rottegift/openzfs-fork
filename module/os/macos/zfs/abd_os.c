@@ -147,7 +147,7 @@ static char *abd_zero_buf = NULL;
  * they will be put on slabs which contain many allocations.
  *
  */
-static size_t zfs_abd_scatter_min_size = ABD_PGSIZE;
+static uint64_t zfs_abd_scatter_min_size = ABD_PGSIZE;
 
 kmem_cache_t *abd_chunk_cache;
 static kstat_t *abd_ksp;
