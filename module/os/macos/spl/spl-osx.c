@@ -619,15 +619,17 @@ spl_start(kmod_info_t *ki, void *d)
 	 *
 	 * There are two VA maps of interest, each of which is sized to
 	 * approximately 2/7 of physical RAM: the kernel shared map and the
-	 * kext private map, which is in a further 2/7 of physical RAM but
+	 * kext private map, which is a further 2/7 of physical RAM but
 	 * shared among many consumers such as other kexts.
 	 *
 	 * We need to avoid using more than about half of each of these two
 	 * maps in order to be good neighbours.
 	 *
-	 * Empirically, on a 512GiB M3 Mac Studio, we can use safely use about
-	 * 54 GiB of the shared memory map, while on a 128 GiB M1 Mac Studio,
-	 * we can safely use about 26 GiB of the shared memory map.
+	 * Empirically, on a 512GiB M3 Mac Studio, we can safely use about
+	 * 60 GiB of the shared memory map, while on a 128 GiB M1 Mac Studio,
+	 * we can safely use about 26 GiB of the shared memory map.  These
+	 * are not hard and fast data to clamp on, however, and a smaller
+	 * ARC on a smaller-RAM machine is tolerable.
 	 *
 	 * Here is a dynamic memory cap set to spl_total_memory that
 	 * will be used to avoid growing our memory consumption above that
@@ -635,6 +637,11 @@ spl_start(kmod_info_t *ki, void *d)
 	 * rather than specifically the shared memory map.  In future, there
 	 * should be a cap for each of these two memory maps on systems with
 	 * IOMallocData().
+	 *
+	 * The initial setting for the dynamic memory cap is presently
+	 * strictly tautologous, but attracts the eyeballs.  Presently it can
+	 * be set to this point and smaller by an administrator using sysctl,
+	 * and the value is subject to automatic deflation.
 	 */
 
 	extern _Atomic uint64_t spl_dynamic_memory_cap;
