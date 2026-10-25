@@ -162,6 +162,7 @@ osif_malloc(uint64_t size)
 	if (kr == KERN_SUCCESS) {
 		atomic_inc_64(&stat_osif_malloc_success);
 		atomic_add_64(&segkmem_total_mem_allocated, size);
+		atomic_add_64(&spl_shared_mem_allocated, size);
 		atomic_add_64(&stat_osif_malloc_bytes, size);
 		return ((void *)tr);
 	} else {
@@ -192,6 +193,7 @@ osif_free(const void *buf, uint64_t size)
 	IOFreeAligned((void *)buf, size);
 	atomic_inc_64(&stat_osif_free);
 	atomic_sub_64(&segkmem_total_mem_allocated, size);
+	atomic_sub_64(&spl_shared_mem_allocated, size);
 	atomic_add_64(&stat_osif_free_bytes, size);
 #else
 	free(buf);
@@ -281,8 +283,10 @@ abd_data_import(vmem_t *vmp, size_t size, int vmflag)
 
 	if (usedata && size > ABD_DATA_ZONE_MAX) {
 		void *p = IOMallocData(size);
-		if (p != NULL)
+		if (p != NULL) {
 			atomic_add_64(&segkmem_total_mem_allocated, size);
+			atomic_add_64(&spl_private_mem_allocated, size);
+		}
 		return (p);
 	}
 	return (vmem_alloc_impl(spl_heap_arena, size, vmflag));
@@ -296,6 +300,7 @@ abd_data_release(vmem_t *vmp, const void *p, size_t size)
 	if (usedata && size > ABD_DATA_ZONE_MAX) {
 		IOFreeData((void *)p, size);
 		atomic_sub_64(&segkmem_total_mem_allocated, size);
+		atomic_sub_64(&spl_private_mem_allocated, size);
 		return;
 	}
 	vmem_free_impl(spl_heap_arena, p, size);

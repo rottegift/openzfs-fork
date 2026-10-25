@@ -39,6 +39,9 @@ extern uint64_t real_total_memory; // in bytes,	actual system memory
 extern uint64_t spl_total_memory; // in bytes, sum of below
 extern uint64_t spl_data_private_memory; // bytes we can use via IOMallocData()
 extern uint64_t spl_data_shared_memory; // IOMallocAligned() bytes we can use
+extern uint64_t segkmem_total_mem_allocated; // all memory held
+extern uint64_t spl_shared_mem_allocated; // IOMallocAligned() held
+extern uint64_t spl_private_mem_allocated; // IOMallocData() held
 
 #define	KM_SLEEP	0x0000	/* can block for memory; success guaranteed */
 #define	KM_NOSLEEP	0x0001	/* cannot block for memory; may fail */
@@ -142,6 +145,7 @@ extern int kmem_scnprintf(char *str, size_t size,
 	const char *fmt, ...);
 
 boolean_t spl_arc_no_grow(size_t, boolean_t, kmem_cache_t **);
+boolean_t spl_should_arc_no_grow(void);
 
 extern uint64_t spl_kmem_cache_inuse(kmem_cache_t *cache);
 extern uint64_t spl_kmem_cache_entry_size(kmem_cache_t *cache);

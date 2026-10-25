@@ -368,105 +368,23 @@ arc_reclaim_thread(void *unused)
 		 */
 
 		if (arc_no_grow != B_TRUE) {
-			/*
-			 * The gap is between imported and inuse
-			 * in the abd vmem layer
-			 */
-
-			static hrtime_t when_gap_grew = 0;
-			static hrtime_t deadline = 0;
-			static int64_t previous_gap = 0;
-			static int64_t previous_abd_size = 0;
-
-			int64_t gap = abd_arena_empty_space();
-			int64_t abd_size = abd_arena_total_size();
-
-			if (gap == 0) {
-				/*
-				 * no abd vmem layer fragmentation
-				 * so don't adjust arc_no_grow
-				 */
-				previous_gap = 0;
-				previous_abd_size = abd_size;
-				deadline = 0;
-			} else if (gap > 0 && gap == previous_gap &&
-			    abd_size == previous_abd_size) {
-				if (curtime < when_gap_grew + SEC2NSEC(600)) {
-					/*
-					 * our abd arena is unchanged
-					 * try up to ten minutes for kmem layer
-					 * to free slabs to abd vmem layer,
-					 * probing every arc_grow_retry seconds
-					 */
-					if (deadline <= curtime) {
-						deadline = curtime +
-						    SEC2NSEC(arc_grow_retry);
-						growtime = deadline;
-						arc_no_grow = B_TRUE;
-					}
-					previous_abd_size = abd_size;
-				} else {
-					/*
-					 * ten minutes have expired with no
-					 * good result, shrink the arc a little,
-					 * no more than once every
-					 * arc_grow_retry (5) seconds
-					 */
-					arc_no_grow = B_TRUE;
-					growtime = curtime +
-					    SEC2NSEC(arc_grow_retry);
-					previous_abd_size = abd_size;
-
-					const int64_t sb =
-					    arc_c >> arc_shrink_shift;
-					if (arc_c_min + sb > arc_c) {
-						arc_reduce_target_size(sb);
-						goto lock_and_sleep;
-					}
-				}
-			} else if (gap > 0 && gap > previous_gap) {
-				/*
-				 * kmem layer must have freed slabs
-				 * but vmem layer is holding on because
-				 * of fragmentation.   Don't grow ARC
-				 * for a minute.
-				 */
+			if (spl_should_arc_no_grow()) {
+				const hrtime_t penalty =
+				    SEC2NSEC(10);
+				if (growtime <= curtime + penalty)
+					growtime = curtime + penalty;
+				else
+					growtime += penalty / 2;
 				arc_no_grow = B_TRUE;
-				growtime = curtime + SEC2NSEC(arc_grow_retry);
-				previous_gap = gap;
-				when_gap_grew = curtime;
-				/*
-				 * but if we're growing the abd
-				 * as well as its gap, shrink
-				 */
-				if (abd_size > previous_abd_size) {
-					const int64_t sb =
-					    arc_c >> arc_shrink_shift;
-					if (arc_c_min + sb > arc_c)
-						arc_reduce_target_size(sb);
-				}
-				previous_abd_size = abd_size;
-			} else if (gap > 0 && gap < previous_gap) {
-				/*
-				 * vmem layer successfully freeing.
-				 */
-				if (curtime < when_gap_grew + SEC2NSEC(600)) {
-					arc_no_grow = B_TRUE;
-					growtime = curtime +
-					    SEC2NSEC(arc_grow_retry);
-				}
-				previous_gap = gap;
-				previous_abd_size = abd_size;
-			} else {
-				previous_abd_size = abd_size;
 			}
 		}
 
 		if (growtime > 0 && curtime >= growtime) {
-			if (arc_no_grow == B_TRUE)
+			if (arc_no_grow == B_TRUE) {
 				dprintf("ZFS: arc growtime expired\n");
+				arc_no_grow = B_FALSE;
+			}
 			growtime = 0;
-			arc_no_grow = B_FALSE;
 		}
 
 lock_and_sleep:

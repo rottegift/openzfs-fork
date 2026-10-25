@@ -4124,13 +4124,47 @@ vmem_bucket_number_arc_no_grow(const size_t size)
 boolean_t
 spl_arc_no_grow(size_t size, boolean_t buf_is_metadata, kmem_cache_t **zp)
 {
+	bool rv = false;
+
+	if (spl_should_arc_no_grow())
+		return ((boolean_t)true);
+
 	const uint16_t b = vmem_bucket_number_arc_no_grow(size);
 
-	const bool rv = spl_arc_no_grow_impl(b, size, buf_is_metadata, zp);
+	if (!(rv == true))
+		rv = spl_arc_no_grow_impl(b, size, buf_is_metadata, zp);
 
-	if (rv) {
+	if (rv == true) {
 		atomic_inc_64(&spl_arc_no_grow_count);
 	}
+
+	return ((boolean_t)rv);
+}
+
+boolean_t
+spl_should_arc_no_grow(void)
+{
+	bool rv = false;
+
+	if (spl_use_iomallocdata()) {
+		const uint64_t threshold =
+		    spl_data_private_memory * 95ULL / 100ULL;
+		if (spl_private_mem_allocated >= threshold)
+			rv = true;
+		if (abd_arena_total_size() >= threshold)
+			rv = true;
+	}
+
+	if (!(rv == true) && segkmem_total_mem_allocated >=
+	    (spl_total_memory * 90ULL / 100ULL))
+		rv = true;
+
+	if (!(rv == true) && spl_shared_mem_allocated >=
+	    (spl_data_shared_memory * 90ULL / 100ULL))
+		rv = true;
+
+	if (rv == true)
+		atomic_inc_64(&spl_arc_no_grow_count);
 
 	return ((boolean_t)rv);
 }

@@ -520,6 +520,11 @@ extern unsigned int spl_split_stack_below;
 
 typedef struct spl_stats {
 	kstat_named_t spl_os_alloc;
+	kstat_named_t spl_shared_alloc;
+	kstat_named_t spl_private_alloc;
+	kstat_named_t spl_all_mem_max;
+	kstat_named_t spl_shared_mem_max;
+	kstat_named_t spl_private_mem_max;
 	kstat_named_t spl_active_threads;
 	kstat_named_t spl_active_mutex;
 	kstat_named_t spl_active_rwlock;
@@ -601,6 +606,11 @@ typedef struct spl_stats {
 
 static spl_stats_t spl_stats = {
 	{"os_mem_alloc", KSTAT_DATA_UINT64},
+	{"os_mem_shared_alloc", KSTAT_DATA_UINT64},
+	{"os_mem_private_alloc", KSTAT_DATA_UINT64},
+	{"os_max_mem", KSTAT_DATA_UINT64},
+	{"os_max_shared_mem", KSTAT_DATA_UINT64},
+	{"os_max_private_mem", KSTAT_DATA_UINT64},
 	{"active_threads", KSTAT_DATA_UINT64},
 	{"active_mutex", KSTAT_DATA_UINT64},
 	{"active_rwlock", KSTAT_DATA_UINT64},
@@ -5240,6 +5250,15 @@ spl_kstat_update(kstat_t *ksp, int rw)
 
 	} else {
 		ks->spl_os_alloc.value.ui64 = segkmem_total_mem_allocated;
+		ks->spl_shared_alloc.value.ui64 =
+		    spl_shared_mem_allocated;
+		ks->spl_private_alloc.value.ui64 =
+		    spl_private_mem_allocated;
+		ks->spl_all_mem_max.value.ui64 = spl_total_memory;
+		ks->spl_shared_mem_max.value.ui64 =
+		    spl_data_shared_memory;
+		ks->spl_private_mem_max.value.ui64 =
+		    spl_data_private_memory;
 		ks->spl_active_threads.value.ui64 = zfs_threads;
 		ks->spl_active_mutex.value.ui64 = zfs_active_mutex;
 		ks->spl_active_rwlock.value.ui64 = zfs_active_rwlock;
