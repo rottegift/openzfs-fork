@@ -46,6 +46,8 @@ uint64_t spl_total_memory = 0;
 uint64_t spl_real_total_memory = 0;
 uint64_t spl_data_private_memory = 0;
 uint64_t spl_data_shared_memory = 0;
+uint64_t spl_private_mem_allocated = 0;
+uint64_t spl_shared_mem_allocated = 0;
 
 // Size in bytes of the memory allocated in seg_kmem
 extern uint64_t		segkmem_total_mem_allocated;
