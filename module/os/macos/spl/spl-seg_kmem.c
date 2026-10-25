@@ -275,6 +275,7 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 #define	ABD_DATA_MIN_IMPORT	(2 * 32 * 1024)	/* bigger => fewer kallocs */
 
 extern vmem_t *spl_heap_arena;
+extern void spl_set_arc_no_grow(int);
 
 #ifdef SPL_HAVE_IOMALLOCDATA
 static void *
@@ -292,7 +293,6 @@ abd_data_import(vmem_t *vmp, size_t size, int vmflag)
 		if (spl_private_mem_allocated + size >
 		    spl_data_private_memory) {
 			oom = B_TRUE;
-			extern void spl_set_arc_no_grow(int);
 			spl_set_arc_no_grow(B_TRUE);
 		}
 
