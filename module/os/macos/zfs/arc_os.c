@@ -374,6 +374,7 @@ arc_reclaim_thread(void *unused)
 			 */
 
 			static hrtime_t when_gap_grew = 0;
+			static hrtime_t deadline = 0;
 			static int64_t previous_gap = 0;
 			static int64_t previous_abd_size = 0;
 
@@ -387,17 +388,22 @@ arc_reclaim_thread(void *unused)
 				 */
 				previous_gap = 0;
 				previous_abd_size = abd_size;
+				deadline = 0;
 			} else if (gap > 0 && gap == previous_gap &&
 			    abd_size == previous_abd_size) {
 				if (curtime < when_gap_grew + SEC2NSEC(600)) {
 					/*
 					 * our abd arena is unchanged
 					 * try up to ten minutes for kmem layer
-					 * to free slabs to abd vmem layer
+					 * to free slabs to abd vmem layer,
+					 * probing every arc_grow_retry seconds
 					 */
-					arc_no_grow = B_TRUE;
-					growtime = curtime +
-					    SEC2NSEC(arc_grow_retry);
+					if (deadline <= curtime) {
+						deadline = curtime +
+						    SEC2NSEC(arc_grow_retry);
+						growtime = deadline;
+						arc_no_grow = B_TRUE;
+					}
 					previous_abd_size = abd_size;
 				} else {
 					/*

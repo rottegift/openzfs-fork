@@ -248,13 +248,9 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
  * fallback to using the kmem_default arena same
  * as all the other caches.
  */
+
 // smd: we nevertheless plumb in an arena with heap as parent, so that
 // we can track stats and maintain the VM_ / qc settings differently
-
-#if defined(MAC_OS_X_VERSION_MIN_REQUIRED) &&		\
-	(MAC_OS_X_VERSION_MIN_REQUIRED >= 150000)
-#define	SPL_HAS_IOMALLOCDATA	1
-#endif
 
 /*
  * The smallest exchange with IOMallocData must be bigger
@@ -282,28 +278,27 @@ extern vmem_t *spl_heap_arena;
 static void *
 abd_data_import(vmem_t *vmp, size_t size, int vmflag)
 {
-#if defined(SPL_HAS_IOMALLOCDATA)
-	if (size > ABD_DATA_ZONE_MAX) { /* will not be backed by xnu zone */
-		/* in modern macOS should go to DATA_PRIVATE */
+	const boolean_t usedata = spl_use_iomallocdata();
+
+	if (usedata && size > ABD_DATA_ZONE_MAX) {
 		void *p = IOMallocData(size);
 		if (p != NULL)
 			atomic_add_64(&segkmem_total_mem_allocated, size);
 		return (p);
-	} /* else fall through */
-#endif
+	}
 	return (vmem_alloc_impl(spl_heap_arena, size, vmflag));
 }
 
 static void
 abd_data_release(vmem_t *vmp, const void *p, size_t size)
 {
-#if defined(SPL_HAS_IOMALLOCDATA)
-	if (size > ABD_DATA_ZONE_MAX) { /* return to sender */
+	const boolean_t usedata = spl_use_iomallocdata();
+
+	if (usedata && size > ABD_DATA_ZONE_MAX) {
 		IOFreeData((void *)p, size);
 		atomic_sub_64(&segkmem_total_mem_allocated, size);
 		return;
 	}
-#endif
 	vmem_free_impl(spl_heap_arena, p, size);
 }
 
@@ -316,6 +311,9 @@ segkmem_abd_init()
 	 * between the kmem cache and it's parent.  XNU absorbs this with a a
 	 * large minimum request to the parent vmem_caches on large-memory
 	 * MacOS systems.
+	 *
+	 * Additionally, on modern macOS, ABD chunks are segregated into the
+	 * kext's private wired map, rather than the kernel's shared wired map.
 	 */
 
 	extern vmem_t *spl_heap_arena;
@@ -328,50 +326,43 @@ segkmem_abd_init()
 
 #define	SMALL_RAM_MACHINE (4ULL * 1024ULL * 1024ULL * 1024ULL)
 
-	if (total_memory >= SMALL_RAM_MACHINE) {
-		abd_arena = vmem_create("abd_cache", NULL, 0,
-		    sizeof (void *),
-#if defined(SPL_HAS_IOMALLOCDATA)
-		    abd_data_import, abd_data_release,
-		    spl_heap_arena,
-#else
-		    vmem_alloc_impl, vmem_free_impl,
-		    spl_heap_arena,
-#endif
-		    MAX(BIG_SLAB, ABD_DATA_MIN_IMPORT),
-		    VM_SLEEP | VMC_NO_QCACHE);
-#if defined(SPL_HAS_IOMALLOCDATA)
-		VERIFY3P(abd_arena, !=, NULL);
-		/*
-		 * make self self's parent, as with the bucket arenas'
-		 * b->vm_source = b;
-		 */
-		abd_arena->vm_source = abd_arena;
-#endif
-	} else {
-		abd_arena = vmem_create("abd_cache", NULL, 0,
-		    sizeof (void *),
-#if defined(SPL_HAS_IOMALLOCDATA)
-		    abd_data_import, abd_data_release,
-		    spl_heap_arena,
-#else
-		    vmem_alloc_impl, vmem_free_impl,
-		    spl_heap_arena,
-#endif
-		    MAX(PAGESIZE, ABD_DATA_MIN_IMPORT),
-		    VM_SLEEP | VMC_NO_QCACHE);
+	const boolean_t usedata = spl_use_iomallocdata();
+	vmem_alloc_t *importer;
+	vmem_free_t *releaser;
+	size_t span_size;
 
-#if defined(SPL_HAS_IOMALLOCDATA)
-		VERIFY3P(abd_arena, !=, NULL);
-		/*
-		 * make self self's parent, as with the bucket arenas'
-		 * b->vm_source = b;
-		 */
-		abd_arena->vm_source = abd_arena;
-#endif
+	if (total_memory >= SMALL_RAM_MACHINE)
+		span_size = MAX(BIG_SLAB, ABD_DATA_MIN_IMPORT);
+	else
+		span_size = MAX(PAGESIZE, ABD_DATA_MIN_IMPORT);
+
+	if (usedata) {
+		importer = abd_data_import;
+		releaser = abd_data_release;
+	} else {
+		importer = vmem_alloc_impl;
+		releaser = vmem_free_impl;
 	}
 
+	abd_arena = vmem_create("abd_cache", NULL, 0,
+	    sizeof (void *),
+	    importer, releaser,
+	    spl_heap_arena,
+	    span_size,
+	    VM_SLEEP | VMC_NO_QCACHE);
+
 	VERIFY3P(abd_arena, !=, NULL);
+
+	if (usedata) {
+		/*
+		 * If we are using abd_data_import / abd_data_release,
+		 * make self self's parent, as with the bucket arenas'
+		 * b->vm_source = b;
+		 *
+		 * spl_heap_arena was just a nominal parent at create time.
+		 */
+		abd_arena->vm_source = abd_arena;
+	}
 
 	/*
 	 * We also have a child arena for sub-page allocations, so as to avoid
@@ -383,19 +374,11 @@ segkmem_abd_init()
 	 * This will be _Static_assert-ed in abd_os.c.
 	 */
 
-	if (total_memory >= SMALL_RAM_MACHINE) {
-		abd_subpage_arena = vmem_create("abd_subpage_cache", NULL, 0,
-		    sizeof (void *),
-		    vmem_alloc_impl, vmem_free_impl,
-		    abd_arena,
-		    BIG_SLAB, VM_SLEEP | VMC_NO_QCACHE);
-	} else {
-		abd_subpage_arena = vmem_create("abd_subpage_cache", NULL, 0,
-		    sizeof (void *),
-		    vmem_alloc_impl, vmem_free_impl,
-		    abd_arena,
-		    PAGESIZE, VM_SLEEP | VMC_NO_QCACHE);
-	}
+	abd_subpage_arena = vmem_create("abd_subpage_cache", NULL, 0,
+	    sizeof (void *),
+	    vmem_alloc_impl, vmem_free_impl,
+	    abd_arena,
+	    PAGESIZE, VM_SLEEP | VMC_NO_QCACHE);
 
 	VERIFY3P(abd_subpage_arena, !=, NULL);
 }

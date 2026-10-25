@@ -161,7 +161,7 @@ extern void vmem_qcache_reap(vmem_t *vmp);
 extern int64_t vmem_buckets_size(int);
 extern int64_t abd_arena_empty_space(void);
 extern int64_t abd_arena_total_size(void);
-
+extern boolean_t spl_use_iomallocdata(void);
 /*
  * Since Linux code uses vmem_alloc()/vmem_free and it is not
  * the illumos one, wrap kmem_alloc()/kmem_free.

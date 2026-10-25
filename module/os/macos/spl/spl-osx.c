@@ -459,6 +459,73 @@ ddi_copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done)
 	return (ret);
 }
 
+/*
+ * If the kext can use IOMallocData(), return true.
+ *
+ * This will put ABD chunks into this kext's private wired memory which is
+ * instrumented in "/usr/bin/zprint org.openzfsonosx.zfs", rather than in the
+ * kernel's shared wired map, where memory backed by IOMallocAligned() is
+ * found.  ABD chunks are by far the largest consumer of memory by this kext
+ * so long as abd_scatter_enabled is true (default) and abd_scatter_min_size
+ * is sensible (see module/os/macos/abd_os.c).
+ *
+ * The shared wired map *must* be used for data that will be exported from the
+ * kext via a remapping, which is any memory we pass to IOKit objects, the
+ * uio*() and UPL functions, and so forth. The private wired map is only
+ * reliably safe when the data is (from our kext's persepective) a blob whose
+ * contents don't depend on any memory address versus whether memory addresses
+ * (pointers, mutexes, etc) might in the allocated data.  ABD chunks are
+ * paradigmatic of "blob" data that is never shared, since chunk ABD are
+ * copied into (shared-map) linear ABDs before "export" from our private map
+ * (see e.g. the use of abd_borrow_buf_copy() and abd_borrow_buf() in
+ * module/os/macos/zfs/vdev_disk.c*).
+ *
+ * Most allocations are backed by IOMallocAligned(), which allocates in the
+ * shared wired map.  On small-memory machines we run the risk of being out of
+ * memory, signalled by a NULL from IOMallocAligned().  While we can deal with
+ * that, other kexts and kernel consumers can freak out leading to panics and
+ * other unexpected behaviours.  Consequently, there are several mechanisms in
+ * the kext to avoid using too much system memory.
+ *
+ * Small IOMallocData allocations (generally less than 32KiB) will go
+ * to the kernel-global zones allocator, which is counterproductive for our
+ * vmem and kmem allocators, as it adds unnecessary work by the zones
+ * infrastructure, and because we have to be careful not to run any zone out
+ * of memory.  Those are better backed by kmem+vmem+IOMallocAligned(), and
+ * this is implemented in spl-seg_kmem.c
+ *
+ * The return value of spl_use_iomallocdata(), which much be invariant from
+ * kext start time, influences the amount of memory the kext will try to use.
+ * If B_FALSE, we should use less than 80% of 1/8 of the total physical system
+ * memory. Even if there is ample wire-able space available, the constraint is
+ * the size of the kernel shared map. Controlling the maximum ARC size is the
+ * principal mechanism to respect this, so we can be a good neighbour to other
+ * parts of the kernel and other kexts.
+ *
+ * If B_TRUE, then most kext data is in the kernel private map space, which
+ * is a different ~ 1/8 of total system memory. In general we must assume that
+ * it is shared with other kexts, but practically all consumers of this space
+ * will wait for memory to become available, so we can let ABD chunks occupy a
+ * large fraction this memory space. Controlling the size of the ABD chunk
+ * arena then becomes the principal mechanism, however we do that within the
+ * context of a ceiling on the ARC size.
+ *
+ * B_TRUE therefore allows for a larger ARC size (as ARC mainly holds
+ * references to ABD chunks) while nearly eliminating risk of exhausting the
+ * kernel shared map's VA map or its memory size.
+ *
+ */
+boolean_t
+spl_use_iomallocdata(void)
+{
+#if defined(MAC_OS_X_VERSION_MIN_REQUIRED) &&		\
+	(MAC_OS_X_VERSION_MIN_REQUIRED >= 150000)
+	return (B_TRUE);
+#else
+	return (B_FALSE);
+#endif
+}
+
 kern_return_t
 spl_start(kmod_info_t *ki, void *d)
 {
