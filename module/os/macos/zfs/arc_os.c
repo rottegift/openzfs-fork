@@ -387,6 +387,13 @@ arc_reclaim_thread(void *unused)
 			growtime = 0;
 		}
 
+		if (growtime >= curtime && curtime >= arc_growtime) {
+			arc_no_grow = B_TRUE;
+			arc_warm = B_TRUE;
+			arc_growtime = gethrtime() +
+			    SEC2NSEC(arc_grow_retry);
+		}
+
 lock_and_sleep:
 
 		arc_reclaim_in_loop = B_FALSE;
