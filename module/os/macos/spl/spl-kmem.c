@@ -5051,12 +5051,12 @@ spl_free_thread(void *notused)
 			int64_t total_mem_used = (int64_t)
 			    segkmem_total_mem_allocated;
 			if ((segkmem_total_mem_allocated * 100LL /
-			    spl_total_memory) > 70) {
-				new_spl_free -= total_mem_used / 64;
-			} else if ((segkmem_total_mem_allocated * 100LL /
 			    spl_total_memory) > 75) {
 				new_spl_free -= total_mem_used / 32;
 				lowmem = true;
+			} else if ((segkmem_total_mem_allocated * 100LL /
+			    spl_total_memory) > 70) {
+				new_spl_free -= total_mem_used / 64;
 			}
 		}
 
