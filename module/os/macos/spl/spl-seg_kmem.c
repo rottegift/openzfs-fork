@@ -98,18 +98,6 @@ typedef uint8_t vm_tag_t;
  */
 #define	SPL_TAG	6
 
-/*
- * In kernel lowlevel form of malloc.
- */
-void *IOMalloc(vm_size_t size);
-void *IOMallocAligned(vm_size_t size, vm_offset_t alignment);
-
-/*
- * Free memory
- */
-void IOFree(const void *address, vm_size_t size);
-void IOFreeAligned(const void *address, vm_size_t size);
-
 #endif /* _KERNEL */
 
 typedef int page_t;
