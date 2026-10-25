@@ -36,7 +36,7 @@ extern "C" {
 // XNU total amount of memory
 extern uint64_t physmem; // in PAGESIZE
 extern uint64_t spl_real_total_memory; // in bytes,	actual system memory
-extern uint64_t spl_total_memory; // in bytes, sum of below
+extern uint64_t spl_total_memory; // in bytes, 80% of shared + all private
 extern uint64_t spl_data_private_memory; // bytes we can use via IOMallocData()
 extern uint64_t spl_data_shared_memory; // IOMallocAligned() bytes we can use
 extern uint64_t segkmem_total_mem_allocated; // all memory held

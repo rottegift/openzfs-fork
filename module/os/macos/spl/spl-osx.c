@@ -500,7 +500,7 @@ ddi_copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done)
  *
  * The return value of spl_use_iomallocdata(), which much be invariant from
  * kext start time, influences the amount of memory the kext will try to use.
- * If B_FALSE, we should use less than 80% of 1/8 of the total physical system
+ * If B_FALSE, we should use less than 80% of 1/7 of the total physical system
  * memory. Even if there is ample wire-able space available, the constraint is
  * the size of the kernel shared map. Controlling the maximum ARC size is the
  * principal mechanism to respect this, so we can be a good neighbour to other
@@ -601,8 +601,8 @@ spl_start(kmod_info_t *ki, void *d)
 		spl_data_shared_memory = spl_real_total_memory / 7;
 	}
 
-	spl_total_memory = (spl_data_private_memory +
-	    spl_data_shared_memory) * 80ULL / 100ULL;
+	spl_total_memory = (spl_data_shared_memory * 80ULL / 100ULL) +
+	    spl_data_private_memory;
 
 	physmem = spl_total_memory / PAGE_SIZE;
 
