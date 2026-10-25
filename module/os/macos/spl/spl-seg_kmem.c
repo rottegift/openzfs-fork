@@ -276,11 +276,6 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 
 extern vmem_t *spl_heap_arena;
 
-#if defined(MAC_OS_X_VERSION_MIN_REQUIRED) &&		\
-	(MAC_OS_X_VERSION_MIN_REQUIRED >= 150000)
-#define	SPL_HAVE_IOMALLOCDATA	1
-#endif
-
 #ifdef SPL_HAVE_IOMALLOCDATA
 static void *
 abd_data_import(vmem_t *vmp, size_t size, int vmflag)

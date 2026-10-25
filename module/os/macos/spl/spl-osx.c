@@ -507,7 +507,7 @@ ddi_copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done)
  * parts of the kernel and other kexts.
  *
  * If B_TRUE, then most kext data is in the kernel private map space, which
- * is a different ~ 1/8 of total system memory. In general we must assume that
+ * is a different ~ 1/7 of total system memory. In general we must assume that
  * it is shared with other kexts, but practically all consumers of this space
  * will wait for memory to become available, so we can let ABD chunks occupy a
  * large fraction this memory space. Controlling the size of the ABD chunk
@@ -522,8 +522,7 @@ ddi_copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done)
 boolean_t
 spl_use_iomallocdata(void)
 {
-#if defined(MAC_OS_X_VERSION_MIN_REQUIRED) &&		\
-	(MAC_OS_X_VERSION_MIN_REQUIRED >= 150000)
+#ifdef SPL_HAVE_IOMALLOCDATA
 	return (B_TRUE);
 #else
 	return (B_FALSE);

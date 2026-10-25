@@ -162,6 +162,12 @@ extern int64_t vmem_buckets_size(int);
 extern int64_t abd_arena_empty_space(void);
 extern int64_t abd_arena_total_size(void);
 extern boolean_t spl_use_iomallocdata(void);
+
+#if defined(MAC_OS_X_VERSION_MIN_REQUIRED) &&		\
+	(MAC_OS_X_VERSION_MIN_REQUIRED >= 150000)
+#define	SPL_HAVE_IOMALLOCDATA	1
+#endif
+
 /*
  * Since Linux code uses vmem_alloc()/vmem_free and it is not
  * the illumos one, wrap kmem_alloc()/kmem_free.

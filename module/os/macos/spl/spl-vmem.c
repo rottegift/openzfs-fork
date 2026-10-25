@@ -4160,7 +4160,7 @@ spl_should_arc_no_grow(void)
 		rv = true;
 
 	if (!(rv == true) && spl_shared_mem_allocated >=
-	    (spl_data_shared_memory * 90ULL / 100ULL))
+	    (spl_data_shared_memory * 80ULL / 100ULL))
 		rv = true;
 
 	if (rv == true)
