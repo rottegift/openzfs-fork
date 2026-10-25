@@ -275,15 +275,14 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 #define	ABD_DATA_MIN_IMPORT	(2 * 32 * 1024)	/* bigger => fewer kallocs */
 
 extern vmem_t *spl_heap_arena;
-/* from include/sys/arc_impl.h */
-extern uint_t arc_shrink_shift;
-extern uint64_t arc_reduce_target_size(uint64_t to_free);
 
 #ifdef SPL_HAVE_IOMALLOCDATA
 
 /*
- * Imports to this arena are driven by ARC growth, and at present
- * the only check on importing is arc_no_grow() and
+ * Imports to this arena are driven by ARC growth, and at present the only
+ * check on importing is arc_no_grow() and spl_free_set_pressure_additive().
+ *
+ * We do no wait loop of our own.
  */
 
 static void *
@@ -303,8 +302,6 @@ abd_data_import(vmem_t *vmp, size_t size, int vmflag)
 			oom = B_TRUE;
 			spl_set_arc_no_grow(B_TRUE);
 			spl_free_set_pressure_additive(size);
-			arc_reduce_target_size(MAX(size,
-			    arc_shrink_shift));
 		}
 
 		/*
@@ -334,8 +331,6 @@ abd_data_release(vmem_t *vmp, const void *p, size_t size)
 		if (spl_private_mem_allocated >
 		    spl_data_private_memory + size) {
 			spl_free_set_pressure_additive(size);
-			arc_reduce_target_size(
-			    MIN(size, arc_shrink_shift));
 		}
 		IOFreeData((void *)p, size);
 		atomic_sub_64(&segkmem_total_mem_allocated, size);

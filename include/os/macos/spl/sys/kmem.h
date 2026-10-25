@@ -88,10 +88,8 @@ boolean_t spl_free_fast_pressure_wrapper(void);
 void spl_free_set_pressure(int64_t);
 void spl_free_set_fast_pressure(boolean_t);
 uint64_t spl_free_last_pressure_wrapper(void);
-void spl_free_set_presure(int64_t);
-	extern void spl_free_set_pressure_additive(int64_t);
+extern void spl_free_set_pressure_additive(int64_t);
 extern void spl_set_arc_no_grow(int);
-
 
 #define	KMC_NOTOUCH	0x00010000
 #define	KMC_NODEBUG	0x00020000
