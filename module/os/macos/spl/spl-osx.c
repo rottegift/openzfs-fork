@@ -42,8 +42,10 @@ static utsname_t utsname_static = { { 0 } };
 unsigned int max_ncpus = 0;
 unsigned int boot_ncpus = 0;
 unsigned int num_ecores = 0;
-uint64_t  total_memory = 0;
-uint64_t  real_total_memory = 0;
+uint64_t total_memory = 0;
+uint64_t spl_real_total_memory = 0;
+uint64_t spl_data_private_memory = 0;
+uint64_t spl_data_shared_memory = 0;
 
 // Size in bytes of the memory allocated in seg_kmem
 extern uint64_t		segkmem_total_mem_allocated;
@@ -555,9 +557,9 @@ spl_start(kmod_info_t *ki, void *d)
 	spl_mtx_grp = lck_grp_alloc_init("spl-mutex", spl_mtx_grp_attr);
 
 	while (1) {
-		len = sizeof (total_memory);
-		sysctlbyname("hw.memsize", &total_memory, &len, NULL, 0);
-		if (total_memory != 0) break;
+		len = sizeof (spl_real_total_memory);
+		sysctlbyname("hw.memsize", &spl_real_total_memory, &len, NULL, 0);
+		if (spl_real_total_memory != 0) break;
 
 		printf("SPL: waiting for sysctl...\n");
 		delay(hz>>1);
@@ -575,13 +577,31 @@ spl_start(kmod_info_t *ki, void *d)
 #endif
 
 	/*
-	 * Setting the total memory to physmem * 50% here, since kmem is
-	 * not in charge of all memory and we need to leave some room for
-	 * the OS X allocator. We internally add pressure if we step over it
+	 * set up kext's notions of RAM availability
 	 */
-	real_total_memory = total_memory;
-	total_memory = total_memory * 50ULL / 100ULL;
-	physmem = total_memory / PAGE_SIZE;
+
+	if (spl_use_iomallocdata()) {
+		/*
+		 * This is a modern macOS where we expect to have ABD chunks
+		 * in the kext's private map, which is shared with other maps
+		 */
+
+		/*
+		 * kernel private wired memory and kernel shared wire memory
+		 * are each 2/7 of physical memory, but we want to be good
+		 * neighbours and only use 1/7 of each
+		 */
+		spl_data_private_memory = spl_real_total_memory / 7;
+		spl_data_shared_memory = spl_real_total_memory / 7;
+	} else {
+		spl_data_private_memory = 0;
+		spl_data_shared_memory = spl_real_total_memory / 7;
+	}
+
+	spl_total_memory = (spl_data_private_memory +
+	    spl_data_shared_memory) * 80ULL / 100ULL;
+
+	physmem = spl_total_memory / PAGE_SIZE;
 
 #if defined(__arm64__)
 	/*
@@ -615,7 +635,7 @@ spl_start(kmod_info_t *ki, void *d)
 	extern _Atomic uint64_t spl_dynamic_memory_cap;
 
 	if (real_total_memory >= 64LL*1024LL*1024LL*1024LL)
-		spl_dynamic_memory_cap = 26LL*1024LL*1024LL*1024LL;
+		spl_dynamic_memory_cap = spl_total_memory;
 #endif
 
 	len = sizeof (utsname_static.sysname);
@@ -643,7 +663,7 @@ spl_start(kmod_info_t *ki, void *d)
 	    sizeof (utsname_static.nodename));
 
 	spl_mutex_subsystem_init();
-	spl_kmem_init(total_memory);
+	spl_kmem_init(spl_total_memory);
 	spl_vnode_init();
 	spl_kmem_thread_init();
 	spl_kmem_mp_init();
