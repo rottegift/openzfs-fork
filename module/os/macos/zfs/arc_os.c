@@ -356,17 +356,6 @@ arc_reclaim_thread(void *unused)
 			goto lock_and_sleep;
 		}
 
-		/*
-		 * The abd vmem layer can see a large number of
-		 * frees from the abd kmem cache layer, and unfortunately
-		 * the abd vmem layer might end up fragmented as a result.
-		 *
-		 * Watch for this fragmentation and if it arises
-		 * suppress ARC growth for ten minutes in hopes that
-		 * abd activity driven by ARC replacement or further ARC
-		 * shrinking lets the abd vmem layer defragment.
-		 */
-
 		if (arc_no_grow != B_TRUE) {
 			if (spl_should_arc_no_grow()) {
 				const hrtime_t penalty =
@@ -380,6 +369,7 @@ arc_reclaim_thread(void *unused)
 		}
 
 		if (growtime > 0 && curtime >= growtime) {
+			/* a pause has expired */
 			if (arc_no_grow == B_TRUE) {
 				dprintf("ZFS: arc growtime expired\n");
 				arc_no_grow = B_FALSE;
@@ -388,6 +378,7 @@ arc_reclaim_thread(void *unused)
 		}
 
 		if (growtime >= curtime && curtime >= arc_growtime) {
+			/* a pause is pending */
 			arc_no_grow = B_TRUE;
 			arc_warm = B_TRUE;
 			arc_growtime = gethrtime() +
