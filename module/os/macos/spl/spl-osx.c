@@ -637,7 +637,7 @@ spl_start(kmod_info_t *ki, void *d)
 
 	extern _Atomic uint64_t spl_dynamic_memory_cap;
 
-	if (real_total_memory >= 64LL*1024LL*1024LL*1024LL)
+	if (spl_real_total_memory >= 64LL*1024LL*1024LL*1024LL)
 		spl_dynamic_memory_cap = spl_total_memory;
 #endif
 
