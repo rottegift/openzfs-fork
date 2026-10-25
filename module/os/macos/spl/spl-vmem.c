@@ -3547,7 +3547,7 @@ vmem_init(const char *heap_name,
 
 	// create arenas for the VMEM_BUCKETS, id 2 - id 14
 
-	VERIFY3U(real_total_memory, >=, 1024ULL*1024ULL*1024ULL);
+	VERIFY3U(spl_real_total_memory, >=, 1024ULL*1024ULL*1024ULL);
 
 	/*
 	 * Minimum bucket span size, which is what we ask IOMallocAligned for.
@@ -3559,7 +3559,7 @@ vmem_init(const char *heap_name,
 	    128ULL * 1024UL;
 
 	dprintf("SPL: %s: real_total_memory %llu, large spans %llu, small "
-	    "spans %llu\n", __func__, real_total_memory,
+	    "spans %llu\n", __func__, spl_real_total_memory,
 	    spl_bucket_tunable_large_span, spl_bucket_tunable_small_span);
 
 	char *buf;
