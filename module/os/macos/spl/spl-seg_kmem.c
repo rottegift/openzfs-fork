@@ -281,8 +281,29 @@ static void *
 abd_data_import(vmem_t *vmp, size_t size, int vmflag)
 {
 	const boolean_t usedata = spl_use_iomallocdata();
+	boolean_t oom = B_FALSE;
 
 	if (usedata && size > ABD_DATA_ZONE_MAX) {
+		/*
+		 * stop ARC growth if we will cross the
+		 * limit of what kext private data
+		 * we should allocate
+		 */
+		if (spl_private_mem_allocated + size >
+		    spl_data_private_memory) {
+			oom = B_TRUE;
+			extern void spl_set_arc_no_grow(int);
+			spl_set_arc_no_grow(B_TRUE);
+		}
+
+		/*
+		 * honour vmflag, fail if we would cross the limit,
+		 * rather than sleep as below
+		 */
+		if ((vmflag & (VM_NOSLEEP | VM_ABORT)) != 0 && oom) {
+			return (NULL);
+		}
+
 		void *p = IOMallocData(size);
 		if (p != NULL) {
 			atomic_add_64(&segkmem_total_mem_allocated, size);

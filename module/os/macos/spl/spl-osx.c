@@ -606,38 +606,42 @@ spl_start(kmod_info_t *ki, void *d)
 	physmem = spl_total_memory / PAGE_SIZE;
 
 #if defined(__arm64__)
+
 	/*
-	 * 128GiB Studio Ultras with 12.6.1 and earlier will panic, usually in
-	 * another kernel subsystem (hfs, hardware video encoding/decoding),
-	 * after we allocate more than around 30GiB of memory through
-	 * IOMallocAligned().
+	 * Large Apple Silicon, such as full-of-RAM Mac Studios, typically
+	 * will run out of kernel virtual address map space before running out
+	 * of wireable memory.  Since there is plenty of wireable memory and
+	 * other memory available, we will not see memory pressure signalled
+	 * by the kernel.  If we keep allocating naively until we see pressure,
+	 * we will reach the point at which we deprive other consumers of kernel
+	 * memory allocations, triggering undesired behaviour like subsystem
+	 * aborts or system panics.
 	 *
-	 * So far this has not been observed on other hw platforms and has not
-	 * been tested in 13.x (Ventura) on these systems.  However, few other
-	 * macOS hw platforms have more than 64 GiB of RAM.  96 GiB of RAM is
-	 * likely to be the lower limit for running into this problem, since
-	 * smaller systems either [a] will not have spl_total_memory >= 32 GiB,
-	 * [b] will have kernel pressure signals driven by memory use in
-	 * userland and the HFS/APFS buffer cache, or [c] both [a]and[b].
+	 * There are two VA maps of interest, each of which is sized to
+	 * approximately 2/7 of physical RAM: the kernel shared map and the
+	 * kext private map, which is in a further 2/7 of physical RAM but
+	 * shared among many consumers such as other kexts.
 	 *
-	 * For safety, on ARM we default to having a dynamic memory cap of 26
-	 * GiB any ARM with more than 64GiB of RAM.  This will prevent ARC
-	 * growth from climbing much above 20 GiB, consequently limiting the
-	 * various other ZFS caches and overheads. Total consumption will not
-	 * reach the panic-inviting levels around/above 32 GiB, since the ARC
-	 * will be shrunk when approaching the dynamic memory cap.
+	 * We need to avoid using more than about half of each of these two
+	 * maps in order to be good neighbours.
 	 *
-	 * This has proven safe enough, and can be overridden dynamically by a
-	 * sysctl or zsysctl.conf by setting
-	 * kstat.spl.misc.spl_misc.spl_osif_dynamic_memory_cap to some other
-	 * byte count, including 0 (which will allow growth until
-	 * IOMallocAligned() returns a NULL).
+	 * Empirically, on a 512GiB M3 Mac Studio, we can use safely use about
+	 * 54 GiB of the shared memory map, while on a 128 GiB M1 Mac Studio,
+	 * we can safely use about 26 GiB of the shared memory map.
+	 *
+	 * Here is a dynamic memory cap set to spl_total_memory that
+	 * will be used to avoid growing our memory consumption above that
+	 * threshold.   For the moment it only controls the total memory use,
+	 * rather than specifically the shared memory map.  In future, there
+	 * should be a cap for each of these two memory maps on systems with
+	 * IOMallocData().
 	 */
 
 	extern _Atomic uint64_t spl_dynamic_memory_cap;
 
 	if (spl_real_total_memory >= 64LL*1024LL*1024LL*1024LL)
 		spl_dynamic_memory_cap = spl_total_memory;
+
 #endif
 
 	len = sizeof (utsname_static.sysname);
