@@ -276,6 +276,14 @@ segkmem_free(vmem_t *vmp, const void *inaddr, size_t size)
 
 extern vmem_t *spl_heap_arena;
 
+{
+
+#if defined(MAC_OS_X_VERSION_MIN_REQUIRED) &&		\
+	(MAC_OS_X_VERSION_MIN_REQUIRED >= 150000)
+#define	SPL_HAVE_IOMALLOCDATA	1
+#endif
+
+#ifdef SPL_HAVE_IOMALLOCDATA
 static void *
 abd_data_import(vmem_t *vmp, size_t size, int vmflag)
 {
@@ -305,6 +313,8 @@ abd_data_release(vmem_t *vmp, const void *p, size_t size)
 	}
 	vmem_free_impl(spl_heap_arena, p, size);
 }
+
+#endif
 
 void
 segkmem_abd_init()
@@ -341,8 +351,13 @@ segkmem_abd_init()
 		span_size = MAX(PAGESIZE, ABD_DATA_MIN_IMPORT);
 
 	if (usedata) {
+#ifdef	SPL_HAVE_IOMALLOCDATA
 		importer = abd_data_import;
 		releaser = abd_data_release;
+#else
+		importer = vmem_alloc_impl;
+		releaser = vmem_free_impl;
+#endif
 	} else {
 		importer = vmem_alloc_impl;
 		releaser = vmem_free_impl;
@@ -358,6 +373,7 @@ segkmem_abd_init()
 	VERIFY3P(abd_arena, !=, NULL);
 
 	if (usedata) {
+#ifdef SPL_HAVE_IOMALLOCDATA
 		/*
 		 * If we are using abd_data_import / abd_data_release,
 		 * make self self's parent, as with the bucket arenas'
@@ -365,7 +381,9 @@ segkmem_abd_init()
 		 *
 		 * spl_heap_arena was just a nominal parent at create time.
 		 */
+
 		abd_arena->vm_source = abd_arena;
+#endif
 	}
 
 	/*
