@@ -42,7 +42,7 @@ static utsname_t utsname_static = { { 0 } };
 unsigned int max_ncpus = 0;
 unsigned int boot_ncpus = 0;
 unsigned int num_ecores = 0;
-uint64_t total_memory = 0;
+uint64_t spl_total_memory = 0;
 uint64_t spl_real_total_memory = 0;
 uint64_t spl_data_private_memory = 0;
 uint64_t spl_data_shared_memory = 0;
@@ -558,7 +558,8 @@ spl_start(kmod_info_t *ki, void *d)
 
 	while (1) {
 		len = sizeof (spl_real_total_memory);
-		sysctlbyname("hw.memsize", &spl_real_total_memory, &len, NULL, 0);
+		sysctlbyname("hw.memsize", &spl_real_total_memory, &len,
+		    NULL, 0);
 		if (spl_real_total_memory != 0) break;
 
 		printf("SPL: waiting for sysctl...\n");
@@ -614,7 +615,7 @@ spl_start(kmod_info_t *ki, void *d)
 	 * been tested in 13.x (Ventura) on these systems.  However, few other
 	 * macOS hw platforms have more than 64 GiB of RAM.  96 GiB of RAM is
 	 * likely to be the lower limit for running into this problem, since
-	 * smaller systems either [a] will not have total_memory >= 32 GiB,
+	 * smaller systems either [a] will not have spl_total_memory >= 32 GiB,
 	 * [b] will have kernel pressure signals driven by memory use in
 	 * userland and the HFS/APFS buffer cache, or [c] both [a]and[b].
 	 *

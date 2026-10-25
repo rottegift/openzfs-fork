@@ -142,10 +142,6 @@ extern uint64_t		zfs_threads;
 extern uint64_t		zfs_active_mutex;
 extern uint64_t		zfs_active_rwlock;
 
-// Half and full amount of RAM bytes in machine
-extern uint64_t		total_memory;
-extern uint64_t		real_total_memory;
-
 #define	MULT 1
 
 static const char *KMEM_VA_PREFIX = "kmem_va";
@@ -3399,7 +3395,7 @@ spl_minimal_physmem_p(void)
 size_t
 kmem_maxavail(void)
 {
-	return (total_memory);
+	return (spl_total_memory);
 }
 
 /*
@@ -4340,7 +4336,7 @@ kmem_cache_fini()
 
 /*
  * Reduce dynamic memory cap by a set amount ("reduction"), unless the cap is
- * already 1/8 of total_memory or lower.  unlike the logic in
+ * already 1/8 of spl_total_memory or lower.  unlike the logic in
  * spl-vmem.c:xnu_alloc_throttled(), we likely have not observed xnu being
  * ready to deny us memory, so we drop half the cap half as much.
  *
@@ -4357,9 +4353,9 @@ spl_reduce_dynamic_cap(void)
 	 */
 	const uint64_t cap_in = spl_dynamic_memory_cap;
 
-	const uint64_t reduce_amount = total_memory >> 8;
+	const uint64_t reduce_amount = spl_total_memory >> 8;
 
-	const int64_t thresh = total_memory >> 3;
+	const int64_t thresh = spl_total_memory >> 3;
 
 	const int64_t reduction = (int64_t)(cap_in - reduce_amount);
 
@@ -4378,9 +4374,10 @@ spl_reduce_dynamic_cap(void)
 	    SEC2NSEC(60)) {
 
 		if (spl_dynamic_memory_cap == 0 ||
-		    spl_dynamic_memory_cap > total_memory) {
+		    spl_dynamic_memory_cap > spl_total_memory) {
 			spl_dynamic_memory_cap_last_downward_adjust = now;
-			spl_dynamic_memory_cap = total_memory - reduce_amount;
+			spl_dynamic_memory_cap =
+			    spl_total_memory - reduce_amount;
 			atomic_inc_64(&spl_dynamic_memory_cap_reductions);
 		} else if (spl_dynamic_memory_cap > reduced) {
 			spl_dynamic_memory_cap_last_downward_adjust = now;
@@ -4434,7 +4431,7 @@ spl_free_wrapper(void)
 			atomic_inc_64(&spl_memory_cap_enforcements);
 			const int64_t dec = spl_manual_memory_cap -
 			    segkmem_total_mem_allocated;
-			const int64_t giveback = -(total_memory >> 10);
+			const int64_t giveback = -(spl_total_memory >> 10);
 			if (dec > giveback) {
 				spl_free = giveback;
 				return (giveback);
@@ -4620,7 +4617,7 @@ spl_maybe_send_large_pressure(uint64_t now, uint64_t minutes, boolean_t full)
 	spl_last_large_pressure = now;
 
 	const int64_t sixteenth_total_memory =
-	    (int64_t)real_total_memory / 16LL;
+	    (int64_t)spl_total_memory / 16LL;
 	const int64_t sixtyfourth_total_memory =
 	    sixteenth_total_memory / 4LL;
 	int64_t howmuch = sixteenth_total_memory;
@@ -4648,10 +4645,10 @@ spl_free_thread(void *notused)
 
 	/* initialize with a reasonably large amount of memory */
 	spl_free = MAX(4*1024*1024*1024,
-	    total_memory * 75ULL / 100ULL);
+	    spl_total_memory * 75ULL / 100ULL);
 
 	if (spl_dynamic_memory_cap == 0)
-		spl_dynamic_memory_cap = total_memory;
+		spl_dynamic_memory_cap = spl_total_memory;
 
 	mutex_enter(&spl_free_thread_lock);
 
@@ -4679,7 +4676,7 @@ spl_free_thread(void *notused)
 		if (time_now > hz)
 			time_now_seconds = time_now / hz;
 
-		new_spl_free = total_memory -
+		new_spl_free = spl_total_memory -
 		    segkmem_total_mem_allocated;
 
 		/* Ask Mach about pressure */
@@ -4783,10 +4780,10 @@ spl_free_thread(void *notused)
 			}
 			/*
 			 * Cap, bearing in mind that we deflate
-			 * total_memory by 50% at initialization
+			 * spl_total_memory by 50% at initialization
 			 */
-			if (new_spl_free > total_memory)
-				new_spl_free = total_memory;
+			if (new_spl_free > spl_total_memory)
+				new_spl_free = spl_total_memory;
 		}
 
 		/*
@@ -5044,10 +5041,10 @@ spl_free_thread(void *notused)
 			int64_t total_mem_used = (int64_t)
 			    segkmem_total_mem_allocated;
 			if ((segkmem_total_mem_allocated * 100LL /
-			    real_total_memory) > 70) {
+			    spl_total_memory) > 70) {
 				new_spl_free -= total_mem_used / 64;
 			} else if ((segkmem_total_mem_allocated * 100LL /
-			    real_total_memory) > 75) {
+			    spl_total_memory) > 75) {
 				new_spl_free -= total_mem_used / 32;
 				lowmem = true;
 			}
@@ -5084,7 +5081,7 @@ spl_free_thread(void *notused)
 		 */
 		const int64_t spamaxblksz = 16LL * 1024LL;
 		if ((4LL * spamaxblksz) >
-		    (total_memory - segkmem_total_mem_allocated)) {
+		    (spl_total_memory - segkmem_total_mem_allocated)) {
 			if (new_spl_free > 2LL * spamaxblksz)
 				new_spl_free = 2LL * spamaxblksz;
 		}
@@ -5221,9 +5218,9 @@ spl_kstat_update(kstat_t *ksp, int rw)
 		    spl_manual_memory_cap) {
 			uint64_t v =
 			    ks->spl_manual_memory_cap.value.ui64;
-			if (v < total_memory >> 3)
-				v = total_memory >> 3;
-			else if (v > total_memory)
+			if (v < spl_total_memory >> 3)
+				v = spl_total_memory >> 3;
+			else if (v > spl_total_memory)
 				v = 0;
 			spl_manual_memory_cap = v;
 		}
@@ -5233,11 +5230,11 @@ spl_kstat_update(kstat_t *ksp, int rw)
 			uint64_t v =
 			    ks->spl_dynamic_memory_cap.value.ui64;
 			if (v == 0)
-				v = total_memory;
-			else if (v < total_memory >> 3)
-				v = total_memory >> 3;
-			else if (v > total_memory)
-				v = total_memory;
+				v = spl_total_memory;
+			else if (v < spl_total_memory >> 3)
+				v = spl_total_memory >> 3;
+			else if (v > spl_total_memory)
+				v = spl_total_memory;
 			spl_dynamic_memory_cap = v;
 		}
 
@@ -6587,7 +6584,7 @@ kmem_cache_scan(kmem_cache_t *cp)
 size_t
 kmem_size(void)
 {
-	return (total_memory); // smd
+	return (spl_total_memory); // smd
 }
 
 // this is used in arc_reclaim_needed.  if 1, reclaim is needed.
@@ -6788,7 +6785,7 @@ spl_arc_reclaim_needed(const size_t bytes, kmem_cache_t **zp)
 
 	extern uint64_t vmem_xnu_useful_bytes_free(void);
 	const uint64_t min_threshold = 64ULL*1024ULL*1024ULL;
-	const uint64_t pm_pct = real_total_memory >> 8;
+	const uint64_t pm_pct = spl_total_memory >> 8;
 	const uint64_t high_threshold = MAX(min_threshold, (uint64_t)pm_pct);
 	const uint64_t low_threshold = bytes;
 

@@ -116,7 +116,6 @@ vmem_t *abd_arena;
 vmem_t *abd_subpage_arena;
 
 #ifdef _KERNEL
-extern uint64_t total_memory;
 uint64_t stat_osif_malloc_success = 0;
 uint64_t stat_osif_malloc_fail = 0;
 uint64_t stat_osif_free = 0;
@@ -331,7 +330,7 @@ segkmem_abd_init()
 	vmem_free_t *releaser;
 	size_t span_size;
 
-	if (total_memory >= SMALL_RAM_MACHINE)
+	if (spl_total_memory >= SMALL_RAM_MACHINE)
 		span_size = MAX(BIG_SLAB, ABD_DATA_MIN_IMPORT);
 	else
 		span_size = MAX(PAGESIZE, ABD_DATA_MIN_IMPORT);
