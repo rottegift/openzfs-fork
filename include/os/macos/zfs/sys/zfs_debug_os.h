@@ -16,4 +16,16 @@
 #define	 SET_ERROR(err) \
 	(__set_error(__FILE__, __func__, __LINE__, err), err)
 
+#ifdef _KERNEL
+/* See the comment in <sys/cmn_err.h>. */
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern void (panic)(const char *, ...)
+    __attribute__((__noreturn__, __format__(__printf__, 1, 2)));
+#ifdef __cplusplus
+}
+#endif
+#endif
+
 #endif	/* _SYS_ZFS_DEBUG_OS_H */

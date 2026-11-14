@@ -27,6 +27,22 @@
 #include <sys/varargs.h>
 #include <sys/atomic.h>
 
+/*
+ * Declare panic() ourselves.  Newer SDKs declare it noreturn in
+ * <kern/debug.h>; the 10.11 SDK does not, and not every file here
+ * includes that header.  The parentheses keep this valid where
+ * <kern/debug.h> has already made panic a function-like macro, and
+ * the attributes merge with any earlier declaration.
+ */
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern void (panic)(const char *, ...)
+    __attribute__((__noreturn__, __format__(__printf__, 1, 2)));
+#ifdef __cplusplus
+}
+#endif
+
 #define	CE_CONT		0 /* continuation	*/
 #define	CE_NOTE		1 /* notice		*/
 #define	CE_WARN		2 /* warning		*/
